@@ -1,0 +1,31 @@
+MariaDB [webcliente]> SELECT table_name, column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'webcliente' ORDER BY table_name, ordinal_position;
++---------------+------------------+-----------+-------------+---------------------+
+| table_name    | column_name      | data_type | is_nullable | column_default      |
++---------------+------------------+-----------+-------------+---------------------+
+| empresas      | id               | int       | NO          | NULL                |
+| empresas      | numero           | char      | NO          | NULL                |
+| empresas      | nombre           | varchar   | NO          | NULL                |
+| empresas      | carpeta_base     | varchar   | NO          | NULL                |
+| empresas      | activo           | tinyint   | YES         | 1                   |
+| empresas      | fecha_creacion   | timestamp | YES         | current_timestamp() |
+| logs          | id               | int       | NO          | NULL                |
+| logs          | user_id          | int       | YES         | NULL                |
+| logs          | empresa_id       | int       | YES         | NULL                |
+| logs          | accion           | varchar   | NO          | NULL                |
+| logs          | detalle          | text      | YES         | NULL                |
+| logs          | ip               | varchar   | YES         | NULL                |
+| logs          | fecha            | timestamp | YES         | current_timestamp() |
+| users         | id               | int       | NO          | NULL                |
+| users         | username         | varchar   | NO          | NULL                |
+| users         | email            | varchar   | NO          | NULL                |
+| users         | password_hash    | varchar   | NO          | NULL                |
+| users         | rol              | enum      | NO          | NULL                |
+| users         | activo           | tinyint   | YES         | 0                   |
+| users         | fecha_creacion   | timestamp | YES         | current_timestamp() |
+| users         | ultimo_login     | timestamp | YES         | NULL                |
+| user_permisos | id               | int       | NO          | NULL                |
+| user_permisos | user_id          | int       | NO          | NULL                |
+| user_permisos | empresa_id       | int       | NO          | NULL                |
+| user_permisos | subcarpeta       | varchar   | YES         | NULL                |
+| user_permisos | rol              | enum      | YES         | 'lector'            |
+| user_permisos | fecha_asignacion | timestamp | YES         | current_timestamp() |

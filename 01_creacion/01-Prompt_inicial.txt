@@ -1,0 +1,156 @@
+PROMPT BASE – webCliente
+
+Objetivo:
+Desarrollar una aplicación web para que los clientes puedan:
+
+Ver y descargar planos desde un entorno seguro.
+
+Descargar certificados de calidad.
+
+Realizar pedidos (futuro).
+
+Acceder únicamente a la información autorizada según permisos asignados.
+
+Roles diferenciados: admin y cliente, con control estricto de acceso a ficheros.
+
+Entorno de desarrollo: Visual Studio 2022 y/o VS Code.
+Despliegue final: Docker en Synology RS1221+.
+
+Tecnologías
+
+Backend: FastAPI (Python)
+
+Frontend: React + Vite + Tailwind
+
+Base de datos: MariaDB
+
+Seguridad:
+
+bcrypt para hash de contraseñas
+
+JWT para sesiones
+
+Gestión de archivos: smb.py
+
+Solo lectura desde servidor SMB (Windows Server 2022).
+
+Escritura se hace por LAN o automatización externa.
+
+Estructura de carpetas en servidor
+
+\\SERVIDOR\0000 Nombre_Empresa\
+    ├── Planos\
+    └── Certificados\
+
+smb.py lista carpetas según permisos del usuario.
+
+Base de datos (MariaDB)
+users
+
+id INT PK AUTO_INCREMENT
+
+username VARCHAR(100) UNIQUE NOT NULL
+
+email VARCHAR(150) UNIQUE NOT NULL
+
+password_hash VARCHAR(255) NOT NULL
+
+rol ENUM('admin','cliente')
+
+activo BOOLEAN DEFAULT FALSE
+
+fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+ultimo_login TIMESTAMP NULL
+
+empresas
+
+id INT PK AUTO_INCREMENT
+
+numero CHAR(4) UNIQUE NOT NULL
+
+nombre VARCHAR(200) UNIQUE NOT NULL
+
+carpeta_base VARCHAR(255) NOT NULL (\\SERVIDOR\0001 EmpresaX\)
+
+activo BOOLEAN DEFAULT TRUE
+
+fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+user_permisos
+
+id INT PK AUTO_INCREMENT
+
+user_id INT FK → users.id ON DELETE CASCADE
+
+empresa_id INT FK → empresas.id
+
+subcarpeta VARCHAR(255) NULLABLE
+
+NULL → acceso a toda la empresa
+
+Valor → acceso solo a esa subcarpeta (ej. "Planos", "Certificados")
+
+rol ENUM('lector','editor') DEFAULT 'lector'
+
+fecha_asignacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+Nota: los usuarios nuevos no tienen permisos; el admin debe activarlos y asignar permisos.
+
+logs
+
+id INT PK AUTO_INCREMENT
+
+user_id INT FK → users.id NULLABLE
+
+empresa_id INT FK → empresas.id NULLABLE
+
+accion VARCHAR(100) NOT NULL
+
+detalle TEXT NULL
+
+ip VARCHAR(45)
+
+fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+Seguridad y configuración
+
+.env contendrá:
+
+DB_HOST=
+DB_PORT=
+DB_USER=
+DB_PASS=
+DB_NAME=
+JWT_SECRET=
+SMB_HOST=
+SMB_USER=
+SMB_PASS=
+
+.gitignore:
+
+.env
+__pycache__/
+node_modules/
+dist/
+*.log
+
+Frontend
+
+Layouts comunes: header, footer, sidebar
+
+Renderizado dinámico según rol del usuario:
+
+Cliente: acceso limitado a empresas/subcarpetas asignadas
+
+Admin: acceso total + gestión de usuarios/permisos + logs
+
+Próximos pasos
+
+Crear script SQL para la DB con primer usuario admin.
+
+Desarrollar backend: auth + gestión usuarios/permisos + logs + SMB.
+
+Crear frontend con login y dashboards según rol.
+
+Migrar a Docker cuando todo funcione correctamente.
