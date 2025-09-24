@@ -10,6 +10,8 @@ import Planos from "@/pages/clientes/Planos";
 import Pedidos from "@/pages/clientes/Pedidos";
 import { setToken } from "@/api/api";
 
+import Footer from "@/components/layout/Footer";
+
 export default function App() {
     const [userLogged, setUserLogged] = useState(false);
     const [userRol, setUserRol] = useState(""); // 'admin' o 'cliente'
@@ -30,20 +32,23 @@ export default function App() {
 
     return (
         <Router>
-            <div className="flex flex-col h-screen">
-                <header className="relative flex justify-center items-center p-4 bg-[#ADADAD] shadow-md font-sans">
+            <div className="flex flex-col min-h-screen">
+                {/* Header */}
+                <header className="flex justify-center items-center p-4 shadow-md font-sans bg-[#dc8502] z-10">
                     <div className="absolute left-4 text-4xl font-audiowide text-[#022CDC]">dacazMD</div>
-                    <div className="text-4xl font-bold">Portal Clientes</div>
+                    <div className="text-4xl font-bold text-black">Portal Clientes</div>
                     {userLogged && (
                         <button
                             onClick={handleLogout}
-                            className="absolute right-4 bg-red-500 text-white px-4 py-2 rounded"
+                            className="absolute right-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
                         >
                             Desconectar
                         </button>
                     )}
                 </header>
-                <main className="flex-1 flex justify-center items-center bg-gray-100">
+
+                {/* Main: contenido con scroll si es necesario */}
+                <main className="flex-1 overflow-auto bg-pageGradient flex justify-center items-center">
                     <Routes>
                         {/* Login */}
                         <Route path="/" element={
@@ -74,6 +79,9 @@ export default function App() {
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>
                 </main>
+
+                {/* Footer fijo */}
+                <Footer />
             </div>
         </Router>
     );

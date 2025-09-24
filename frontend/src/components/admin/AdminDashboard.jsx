@@ -4,6 +4,7 @@ import Sidebar from "./Sidebar";
 import Header from "./Header";
 import SummaryCards from "./SummaryCards";
 import UserTable from "./UserTable";
+import Footer from "../layout/Footer";
 
 export default function AdminDashboard({ usuario, rol }) {
     const [activeSection, setActiveSection] = useState("Usuarios");
@@ -16,19 +17,29 @@ export default function AdminDashboard({ usuario, rol }) {
     };
 
     return (
-        <div className="flex h-screen w-screen bg-gray-100">
-            <Sidebar usuario={usuario} rol={rol} setActiveSection={setActiveSection} activeSection={activeSection} />
-            <div className="flex flex-col flex-1">
-                <Header usuario={usuario} rol={rol} activeSection={activeSection} />
-                <main className="flex flex-col flex-1 p-6 space-y-6 overflow-auto">
+        <div className="flex flex-col min-h-screen">
+            <Header usuario={usuario} rol={rol} activeSection={activeSection} />
+
+            <div className="flex flex-1 w-full">
+                <Sidebar
+                    usuario={usuario}
+                    rol={rol}
+                    setActiveSection={setActiveSection}
+                    activeSection={activeSection}
+                />
+
+                <main className="flex-1 p-6 space-y-6 bg-pageGradient w-full overflow-auto">
                     {activeSection === "Usuarios" && (
                         <>
                             <SummaryCards onFilter={setFilter} refreshKey={refreshKey} />
                             <UserTable filter={filter} onAction={handleAction} />
                         </>
                     )}
+                    {/* Aquí puedes añadir más secciones si lo deseas */}
                 </main>
             </div>
+
+            <Footer />
         </div>
     );
 }
