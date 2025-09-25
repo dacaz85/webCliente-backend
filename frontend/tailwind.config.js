@@ -17,6 +17,7 @@ module.exports = {
             },
             backgroundImage: {
                 pageGradient: "linear-gradient(to bottom, theme('colors.footerBg'), theme('colors.headerBg'))",
+                pageGradientInverse: "linear-gradient(to top, theme('colors.footerBg'), theme('colors.headerBg'))",
             },
         },
     },

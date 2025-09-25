@@ -7,7 +7,7 @@ export default function Sidebar({ usuario, rol, setActiveSection, activeSection 
     const isActive = (section) => activeSection === section;
 
     return (
-        <aside className="w-64 min-w-[16rem] bg-white shadow-md flex flex-col h-screen p-6">
+        <aside className="w-64 min-w-[16rem] bg-pageGradientInverse/50 shadow-md flex flex-col h-full p-6">
             <div className="mb-8">
                 <div className="text-lg font-semibold">Panel Administrador</div>
             </div>
