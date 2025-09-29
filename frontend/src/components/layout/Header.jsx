@@ -2,29 +2,22 @@
 import React from "react";
 
 export default function Header({ usuario, rol, activeSection, onLogout }) {
-    const isLogged = !!usuario;
+    const isLogged = !!usuario && !!onLogout;
 
-    // Determinar título dinámico según rol
-    const getTitle = () => {
-        if (rol === "admin") {
-            return activeSection || "Panel Administrador";
-        } else if (rol === "cliente") {
-            return "Portal Clientes";
-        } else {
-            return "Portal Clientes";
-        }
-    };
+    // Título central según rol
+    const centralTitle = rol === "admin" ? activeSection || "Panel Administrador" : "Portal Clientes";
 
     return (
         <header className="h-16 flex items-center justify-between p-4 shadow-md font-sans bg-[#dc8502] z-10">
-            {/* Logo + título */}
-            <div className="flex items-center gap-4">
-                <div className="text-4xl font-audiowide text-[#022CDC]">dacazMD</div>
-                <div className="text-3xl font-bold text-black">Portal Clientes</div>
-                <div className="text-2xl font-bold text-black">{getTitle()}</div>
+            {/* Izquierda: Logo */}
+            <div className="text-4xl font-audiowide text-[#022CDC]">dacazMD</div>
+
+            {/* Centro: Título dinámico */}
+            <div className="text-2xl font-bold text-black text-center flex-1">
+                {centralTitle}
             </div>
 
-            {/* Usuario + logout */}
+            {/* Derecha: Usuario + rol + desconectar */}
             {isLogged && (
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -37,14 +30,12 @@ export default function Header({ usuario, rol, activeSection, onLogout }) {
                         </div>
                     </div>
 
-                    {onLogout && (
-                        <button
-                            onClick={onLogout}
-                            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
-                        >
-                            Desconectar
-                        </button>
-                    )}
+                    <button
+                        onClick={onLogout}
+                        className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
+                    >
+                        Desconectar
+                    </button>
                 </div>
             )}
         </header>

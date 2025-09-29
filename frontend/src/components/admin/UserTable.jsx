@@ -80,6 +80,12 @@ export default function UserTable({ filter, onAction }) {
         );
     };
 
+    const goToPermisos = (user) => {
+        if (typeof onAction === "function") {
+            onAction({ section: "Permisos", userId: user.id });
+        }
+    };
+
     if (loading) return <div>Cargando usuarios...</div>;
     if (!users || users.length === 0) return <div>No hay usuarios que mostrar</div>;
 
@@ -87,7 +93,7 @@ export default function UserTable({ filter, onAction }) {
         <div
             ref={containerRef}
             className="flex-1 overflow-auto"
-            style={{ maxHeight: 'calc(100vh - 16rem)' }} // ajusta 16rem según header+footer+padding
+            style={{ maxHeight: 'calc(100vh - 16rem)' }}
         >
             <table className="min-w-full bg-white/50 border">
                 <thead>
@@ -135,6 +141,14 @@ export default function UserTable({ filter, onAction }) {
                                 >
                                     Eliminar
                                 </button>
+                                {u.rol === "cliente" && (
+                                    <button
+                                        onClick={() => goToPermisos(u)}
+                                        className="bg-purple-500 text-white px-2 py-1 rounded"
+                                    >
+                                        Permisos
+                                    </button>
+                                )}
                             </td>
                         </tr>
                     ))}

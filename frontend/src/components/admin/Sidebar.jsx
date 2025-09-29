@@ -1,13 +1,12 @@
 // src/components/admin/Sidebar.jsx
 import React from "react";
-import { Users, Settings } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Users, Building, Key } from "lucide-react";
 
 export default function Sidebar({ usuario, rol, setActiveSection, activeSection }) {
     const isActive = (section) => activeSection === section;
 
     return (
-        <aside className="w-64 min-w-[16rem] bg-pageGradientInverse/50 shadow-md flex flex-col h-full p-6">
+        <aside className="w-64 min-w-[16rem] bg-pageGradientInverse shadow-md flex flex-col h-full p-6">
             <div className="mb-8">
                 <div className="text-lg font-semibold">Panel Administrador</div>
             </div>
@@ -19,13 +18,19 @@ export default function Sidebar({ usuario, rol, setActiveSection, activeSection 
                     <Users size={20} /> Usuarios
                 </button>
 
-                <Link
-                    to="/admin/settings"
-                    onClick={() => setActiveSection("Configuración")}
-                    className={`flex items-center gap-2 px-2 py-1 rounded ${isActive("Configuración") ? "bg-blue-100 font-semibold" : "hover:text-blue-600"}`}
+                <button
+                    onClick={() => setActiveSection("Empresas")}
+                    className={`flex items-center gap-2 text-left px-2 py-1 rounded ${isActive("Empresas") ? "bg-blue-100 font-semibold" : "hover:text-blue-600"}`}
                 >
-                    <Settings size={20} /> Configuración
-                </Link>
+                    <Building size={20} /> Empresas
+                </button>
+
+                <button
+                    onClick={() => setActiveSection("Permisos")}
+                    className={`flex items-center gap-2 text-left px-2 py-1 rounded ${isActive("Permisos") ? "bg-blue-100 font-semibold" : "hover:text-blue-600"}`}
+                >
+                    <Key size={20} /> Permisos
+                </button>
             </nav>
         </aside>
     );

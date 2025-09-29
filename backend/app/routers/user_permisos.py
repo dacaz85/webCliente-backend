@@ -1,0 +1,118 @@
+# app/routers/user_permisos.py
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from typing import List
+from pydantic import BaseModel
+from datetime import datetime
+
+from app.models import UserPermiso, User, Empresa
+from app.utils.deps import get_db
+
+router = APIRouter(prefix="/user_permisos", tags=["user_permisos"])
+
+# --- SCHEMAS ---
+class SubcarpetaPermiso(BaseModel):
+    name: str
+    rol: str = "lector"
+
+class UserPermisoResponse(BaseModel):
+    id: int
+    user_id: int
+    empresa_id: int
+    subcarpeta: str
+    rol: str
+    fecha_asignacion: str
+    username: str = None          # nombre de usuario
+    empresa_nombre: str = None    # nombre de empresa
+
+class UserPermisoCreateUpdate(BaseModel):
+    user_id: int
+    empresa_id: int
+    subcarpetas: List[SubcarpetaPermiso]  # lista de subcarpetas a crear/actualizar
+
+# --- ROUTES ---
+@router.get("/all", response_model=List[UserPermisoResponse])
+async def get_permisos(db: AsyncSession = Depends(get_db)):
+    # Obtener permisos con join a usuario y empresa
+    result = await db.execute(
+        select(UserPermiso, User.username, Empresa.nombre)
+        .join(User, User.id == UserPermiso.user_id)
+        .join(Empresa, Empresa.id == UserPermiso.empresa_id)
+    )
+    permisos = result.all()
+    
+    response = []
+    for p, username, empresa_nombre in permisos:
+        response.append(UserPermisoResponse(
+            id=p.id,
+            user_id=p.user_id,
+            empresa_id=p.empresa_id,
+            subcarpeta=p.subcarpeta,
+            rol=p.rol,
+            fecha_asignacion=str(p.fecha_asignacion),
+            username=username,
+            empresa_nombre=empresa_nombre
+        ))
+    return response
+
+@router.post("/", response_model=List[UserPermisoResponse])
+async def create_permiso(data: UserPermisoCreateUpdate, db: AsyncSession = Depends(get_db)):
+    created = []
+    # Borrar permisos existentes de este usuario para esta empresa
+    await db.execute(delete(UserPermiso).where(
+        (UserPermiso.user_id == data.user_id) &
+        (UserPermiso.empresa_id == data.empresa_id)
+    ))
+    # Crear nuevas filas por subcarpeta
+    for s in data.subcarpetas:
+        permiso = UserPermiso(
+            user_id=data.user_id,
+            empresa_id=data.empresa_id,
+            subcarpeta=s.name,
+            rol=s.rol
+        )
+        db.add(permiso)
+        await db.flush()
+        created.append(UserPermisoResponse(
+            id=permiso.id,
+            user_id=permiso.user_id,
+            empresa_id=permiso.empresa_id,
+            subcarpeta=permiso.subcarpeta,
+            rol=permiso.rol,
+            fecha_asignacion=str(permiso.fecha_asignacion)
+        ))
+    await db.commit()
+    return created
+
+@router.put("/{permiso_id}", response_model=UserPermisoResponse)
+async def update_permiso(permiso_id: int, data: UserPermisoCreateUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserPermiso).where(UserPermiso.id == permiso_id))
+    permiso = result.scalar_one_or_none()
+    if not permiso:
+        raise HTTPException(404, "Permiso no encontrado")
+    
+    permiso.subcarpeta = data.subcarpetas[0].name if data.subcarpetas else permiso.subcarpeta
+    permiso.rol = data.subcarpetas[0].rol if data.subcarpetas else permiso.rol
+
+    db.add(permiso)
+    await db.commit()
+    await db.refresh(permiso)
+    return UserPermisoResponse(
+        id=permiso.id,
+        user_id=permiso.user_id,
+        empresa_id=permiso.empresa_id,
+        subcarpeta=permiso.subcarpeta,
+        rol=permiso.rol,
+        fecha_asignacion=str(permiso.fecha_asignacion)
+    )
+
+@router.delete("/{permiso_id}", response_model=dict)
+async def delete_permiso(permiso_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserPermiso).where(UserPermiso.id == permiso_id))
+    permiso = result.scalar_one_or_none()
+    if not permiso:
+        raise HTTPException(404, "Permiso no encontrado")
+    await db.delete(permiso)
+    await db.commit()
+    return {"msg": "Permiso eliminado"}

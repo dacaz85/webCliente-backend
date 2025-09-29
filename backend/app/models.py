@@ -1,10 +1,11 @@
+# app/models.py
 from sqlalchemy import Column, Integer, String, Enum, Text, TIMESTAMP, CHAR, SmallInteger, text
 from app.database import Base
 import enum
 
 class RolEnum(enum.Enum):
     admin = "admin"
-    cliente = "cliente"  # coincide con la DB
+    cliente = "cliente"
 
 class User(Base):
     __tablename__ = "users"
@@ -39,10 +40,10 @@ class Log(Base):
 class UserPermiso(Base):
     __tablename__ = "user_permisos"
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer)
-    empresa_id = Column(Integer)
-    subcarpeta = Column(String(100))
-    rol = Column(Enum(RolEnum), default=RolEnum.cliente)
+    user_id = Column(Integer, nullable=False)
+    empresa_id = Column(Integer, nullable=False)
+    subcarpeta = Column(String(255), nullable=True)  # nombre de la subcarpeta
+    rol = Column(Enum("lector", "editor"), default="lector")  # rol por subcarpeta
     fecha_asignacion = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
 class Plano(Base):

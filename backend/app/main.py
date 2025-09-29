@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import login, register, users, planos
+from app.routers import login, register, users, planos, empresas, user_permisos
 from app.database import init_models
 
 app = FastAPI(title="WebCliente API")
@@ -26,3 +26,5 @@ app.include_router(login.router)
 app.include_router(register.router)
 app.include_router(users.router)
 app.include_router(planos.router)
+app.include_router(empresas.router)
+app.include_router(user_permisos.router)

@@ -1,7 +1,9 @@
-// src/pages/admin/Register.jsx
+// src/pages/admin/Login.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/api/api";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 
 export default function Register() {
     const [username, setUsername] = useState("");
@@ -51,61 +53,69 @@ export default function Register() {
     };
 
     return (
-        <div className="flex flex-col justify-center items-center w-full h-full py-8">
-            <div className="w-full max-w-md p-6 bg-white/40 rounded shadow-md">
-                <h2 className="text-2xl text-center font-bold mb-4">Solicitar acceso</h2>
+        <div className="flex flex-col min-h-screen">
+            {/* Header */}
+            <Header />
 
-                {error && <div className="text-red-500 mb-2">{error}</div>}
-                {msg && <div className="text-green-500 mb-2">{msg}</div>}
+            <main className="flex-1 flex flex-col justify-center items-center py-8 bg-pageGradient">
+                <div className="w-full max-w-md p-6 bg-white/40 rounded shadow-md">
+                    <h2 className="text-2xl text-center font-bold mb-4">Solicitar acceso</h2>
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <input
-                        type="text"
-                        placeholder="Usuario"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        className="border p-2 rounded"
-                        required
-                    />
-                    <input
-                        type="email"
-                        placeholder="Email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="border p-2 rounded"
-                        required
-                    />
-                    <input
-                        type="password"
-                        placeholder="Contraseña"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="border p-2 rounded"
-                        required
-                    />
-                    <input
-                        type="password"
-                        placeholder="Confirmar Contraseña"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="border p-2 rounded"
-                        required
-                    />
+                    {error && <div className="text-red-500 mb-2">{error}</div>}
+                    {msg && <div className="text-green-500 mb-2">{msg}</div>}
+
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                        <input
+                            type="text"
+                            placeholder="Usuario"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            className="border p-2 rounded"
+                            required
+                        />
+                        <input
+                            type="email"
+                            placeholder="Email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="border p-2 rounded"
+                            required
+                        />
+                        <input
+                            type="password"
+                            placeholder="Contraseña"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="border p-2 rounded"
+                            required
+                        />
+                        <input
+                            type="password"
+                            placeholder="Confirmar Contraseña"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="border p-2 rounded"
+                            required
+                        />
+                        <button
+                            type="submit"
+                            className="bg-[#022CDC] text-white py-2 px-4 rounded hover:bg-[#021f9c] text-lg"
+                        >
+                            Solicitar acceso
+                        </button>
+                    </form>
+
                     <button
-                        type="submit"
-                        className="bg-[#022CDC] text-white py-2 px-4 rounded hover:bg-[#021f9c] text-lg"
+                        onClick={() => navigate("/")}
+                        className="mt-4 w-full text-center text-black bg-[#022CDC]/25 py-2 rounded border-none cursor-pointer text-lg"
                     >
-                        Solicitar acceso
+                        Volver al login
                     </button>
-                </form>
+                </div>
+            </main>
 
-                <button
-                    onClick={() => navigate("/")}
-                    className="mt-4 w-full text-center text-black bg-[#022CDC]/25 py-2 rounded border-none cursor-pointer text-lg"
-                >
-                    Volver al login
-                </button>
-            </div>
+            {/* Footer */}
+            <Footer />
         </div>
     );
 }
