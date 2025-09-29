@@ -153,6 +153,63 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                 </button>
             </div>
 
+            {showForm && (
+                <div className="border p-4 mb-4 bg-white/50 rounded shadow">
+                    <div className="flex flex-col gap-2 mb-2">
+                        <select
+                            value={selectedUser || ""}
+                            onChange={handleUserChange}
+                            className="border px-2 py-1 rounded"
+                        >
+                            <option value="">-- Seleccionar Usuario --</option>
+                            {users.map(u => <option key={u.id} value={u.id}>{u.username} ({u.email})</option>)}
+                        </select>
+
+                        <select
+                            value={selectedEmpresa || ""}
+                            onChange={handleEmpresaChange}
+                            className="border px-2 py-1 rounded"
+                        >
+                            <option value="">-- Seleccionar Empresa --</option>
+                            {empresas.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                        </select>
+                    </div>
+
+                    {subcarpetas.length > 0 && (
+                        <div className="mt-2">
+                            <h4 className="font-bold mb-2">Subcarpetas</h4>
+                            <table className="min-w-full border">
+                                <thead>
+                                    <tr>
+                                        <th className="border px-2 py-1">Seleccionar</th>
+                                        <th className="border px-2 py-1">Subcarpeta</th>
+                                        <th className="border px-2 py-1">Rol</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {subcarpetas.map((s, idx) => (
+                                        <tr key={idx}>
+                                            <td className="border px-2 py-1 text-center">
+                                                <input type="checkbox" checked={s.checked} onChange={() => handleSubcarpetaCheck(idx)} />
+                                            </td>
+                                            <td className="border px-2 py-1">{s.name}</td>
+                                            <td className="border px-2 py-1">
+                                                <select value={s.rol} onChange={(e) => handleSubcarpetaRol(idx, e.target.value)}>
+                                                    <option value="lector">Lector</option>
+                                                    <option value="editor">Editor</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    <button className="mt-2 px-4 py-2 bg-blue-500 text-white rounded" onClick={handleSavePermisos}>Guardar Permisos</button>
+                </div>
+            )}
+
             {loading && <div>Cargando permisos...</div>}
             {!loading && permisos.length === 0 && <div>No hay permisos que mostrar</div>}
 
@@ -200,65 +257,7 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                         </tbody>
                     </table>
                 </div>
-            )}
-
-            {showForm && (
-                <div className="border p-4 mb-4 bg-white/50 rounded shadow">
-                    <div className="flex flex-col gap-2 mb-2">
-                        <select
-                            value={selectedUser || ""}
-                            onChange={handleUserChange}
-                            className="border px-2 py-1 rounded"
-                        >
-                            <option value="">-- Seleccionar Usuario --</option>
-                            {users.map(u => <option key={u.id} value={u.id}>{u.username} ({u.email})</option>)}
-                        </select>
-
-                        <select
-                            value={selectedEmpresa || ""}
-                            onChange={handleEmpresaChange}
-                            className="border px-2 py-1 rounded"
-                        >
-                            <option value="">-- Seleccionar Empresa --</option>
-                            {empresas.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                        </select>
-                    </div>
-
-                    {subcarpetas.length > 0 && (
-                        <div className="mt-2">
-                            <h4 className="font-bold mb-2">Subcarpetas</h4>
-                            <table className="min-w-full border">
-                                <thead>
-                                    <tr>
-                                        <th className="border px-2 py-1">Seleccionar</th>
-                                        <th className="border px-2 py-1">Subcarpeta</th>
-                                        <th className="border px-2 py-1">Rol</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {subcarpetas.map((s, idx) => (
-                                        <tr key={idx}>
-                                            <td className="border px-2 py-1 text-center">
-                                                <input type="checkbox" checked={s.checked} onChange={() => handleSubcarpetaCheck(idx)} />
-                                            </td>
-                                            <td className="border px-2 py-1">{s.name}</td>
-                                            <td className="border px-2 py-1">
-                                                <select value={s.rol} onChange={(e) => handleSubcarpetaRol(idx, e.target.value)}>
-                                                    <option value="lector">Lector</option>
-                                                    <option value="editor">Editor</option>
-                                                    <option value="admin">Admin</option>
-                                                </select>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    <button className="mt-2 px-4 py-2 bg-blue-500 text-white rounded" onClick={handleSavePermisos}>Guardar Permisos</button>
-                </div>
-            )}
+            )}            
         </div>
     );
 }
