@@ -5,6 +5,7 @@ import api from "@/api/api";
 
 export default function UserTable({ filter, onAction }) {
     const [users, setUsers] = useState([]);
+    const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState({ visible: false, title: "", message: "", onConfirm: null });
     const containerRef = useRef(null);
@@ -84,106 +85,122 @@ export default function UserTable({ filter, onAction }) {
 
     const goToPermisos = (user) => {
         if (onAction) {
-            // Forzamos que se reseteen los IDs de empresa
             onAction({ section: "Permisos", userId: user.id, empresaId: null });
         }
     };
+
+    const filteredUsers = users.filter(u =>
+        u.username.toLowerCase().includes(search.toLowerCase()) ||
+        u.email.toLowerCase().includes(search.toLowerCase())
+    );
 
     if (loading) return <div>Cargando usuarios...</div>;
     if (!users || users.length === 0) return <div>No hay usuarios que mostrar</div>;
 
     return (
-        <div
-            ref={containerRef}
-            className="flex-1 overflow-auto"
-            style={{ maxHeight: 'calc(100vh - 16rem)' }}
-        >
-            <table className="min-w-full bg-white/50 border">
-                <thead>
-                    <tr>
-                        <th className="border px-4 py-2 text-left">ID</th>
-                        <th className="border px-4 py-2 text-left">Usuario</th>
-                        <th className="border px-4 py-2 text-left">Email</th>
-                        <th className="border px-4 py-2 text-left">Activo</th>
-                        <th className="border px-4 py-2 text-left">Rol</th>
-                        <th className="border px-4 py-2 text-left">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {users.map(u => (
-                        <tr key={u.id}>
-                            <td className="border px-4 py-2">{u.id}</td>
-                            <td className="border px-4 py-2">{u.username}</td>
-                            <td className="border px-4 py-2">{u.email}</td>
-                            <td className="border px-4 py-2">{u.activo ? "Sí" : "No"}</td>
-                            <td className="border px-4 py-2">{u.rol}</td>
-                            <td className="border px-4 py-2 flex gap-2 flex-wrap">
-                                {!u.activo && (
-                                    <button
-                                        onClick={() => validateUser(u.id)}
-                                        className="bg-green-500 text-white px-2 py-1 rounded"
-                                    >
-                                        Validar
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => elevateUser(u)}
-                                    className="bg-yellow-500 text-white px-2 py-1 rounded"
-                                >
-                                    {u.rol === "admin" ? "Pasar a Cliente" : "Elevar a Admin"}
-                                </button>
-                                <button
-                                    onClick={() => resetPassword(u)}
-                                    className="bg-blue-500 text-white px-2 py-1 rounded"
-                                >
-                                    Resetear contraseña
-                                </button>
-                                <button
-                                    onClick={() => deleteUser(u)}
-                                    className="bg-red-500 text-white px-2 py-1 rounded"
-                                >
-                                    Eliminar
-                                </button>
-                                {u.rol === "cliente" && (
-                                    <button
-                                        onClick={() => goToPermisos(u)}
-                                        className="bg-purple-500 text-white px-2 py-1 rounded"
-                                    >
-                                        Permisos
-                                    </button>
-                                )}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+        <div className="flex flex-col">
+            <div className="flex items-center gap-4 mb-4">
+                <input
+                    type="text"
+                    placeholder="Buscar usuario o email..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="border px-2 py-1 rounded flex-1"
+                />
+            </div>
 
-            {/* Modal */}
-            {modal.visible && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
-                        <h3 className="text-lg font-bold mb-4">{modal.title}</h3>
-                        <p className="mb-6">{modal.message}</p>
-                        <div className="flex justify-end gap-2">
-                            <button
-                                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
-                                onClick={closeModal}
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
-                                onClick={() => {
-                                    modal.onConfirm();
-                                    closeModal();
-                                }}
-                            >
-                                Confirmar
-                            </button>
+            <div
+                ref={containerRef}
+                className="flex-1 overflow-auto"
+                style={{ maxHeight: 'calc(100vh - 16rem)' }}
+            >
+                <table className="min-w-full bg-white/50 border">
+                    <thead>
+                        <tr>
+                            <th className="border px-4 py-2 text-left">ID</th>
+                            <th className="border px-4 py-2 text-left">Usuario</th>
+                            <th className="border px-4 py-2 text-left">Email</th>
+                            <th className="border px-4 py-2 text-left">Activo</th>
+                            <th className="border px-4 py-2 text-left">Rol</th>
+                            <th className="border px-4 py-2 text-left">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredUsers.map(u => (
+                            <tr key={u.id}>
+                                <td className="border px-4 py-2">{u.id}</td>
+                                <td className="border px-4 py-2">{u.username}</td>
+                                <td className="border px-4 py-2">{u.email}</td>
+                                <td className="border px-4 py-2">{u.activo ? "Sí" : "No"}</td>
+                                <td className="border px-4 py-2">{u.rol}</td>
+                                <td className="border px-4 py-2 flex gap-2 flex-wrap">
+                                    {!u.activo && (
+                                        <button
+                                            onClick={() => validateUser(u.id)}
+                                            className="bg-green-500 text-white px-2 py-1 rounded"
+                                        >
+                                            Validar
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => elevateUser(u)}
+                                        className="bg-yellow-500 text-white px-2 py-1 rounded"
+                                    >
+                                        {u.rol === "admin" ? "Pasar a Cliente" : "Elevar a Admin"}
+                                    </button>
+                                    <button
+                                        onClick={() => resetPassword(u)}
+                                        className="bg-blue-500 text-white px-2 py-1 rounded"
+                                    >
+                                        Resetear contraseña
+                                    </button>
+                                    <button
+                                        onClick={() => deleteUser(u)}
+                                        className="bg-red-500 text-white px-2 py-1 rounded"
+                                    >
+                                        Eliminar
+                                    </button>
+                                    {u.rol === "cliente" && (
+                                        <button
+                                            onClick={() => goToPermisos(u)}
+                                            className="bg-purple-500 text-white px-2 py-1 rounded"
+                                        >
+                                            Permisos
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {/* Modal */}
+                {modal.visible && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
+                            <h3 className="text-lg font-bold mb-4">{modal.title}</h3>
+                            <p className="mb-6">{modal.message}</p>
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+                                    onClick={closeModal}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
+                                    onClick={() => {
+                                        modal.onConfirm();
+                                        closeModal();
+                                    }}
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }

@@ -5,6 +5,7 @@ import api from "@/api/api";
 
 export default function EmpresaTable({ filter, onAction }) {
     const [empresas, setEmpresas] = useState([]);
+    const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState({ visible: false, title: "", onConfirm: null });
     const [formData, setFormData] = useState({ numero: "", nombre: "", activo: true });
@@ -73,35 +74,35 @@ export default function EmpresaTable({ filter, onAction }) {
 
     const handlePermisos = (empresa) => {
         if (onAction) {
-            // Forzamos que se reseteen los IDs de usuario
             onAction({ section: "Permisos", userId: null, empresaId: empresa.id });
         }
     };
 
-    const handleSubcarpetas = async (empresaId) => {
-        try {
-            const res = await api.get(`/empresas/${empresaId}/subcarpetas`);
-            setSubcarpetas(res.data || []);
-            if (!res.data || res.data.length === 0) alert("No hay subcarpetas");
-        } catch (err) {
-            console.error(err);
-            alert("Error al obtener subcarpetas");
-            setSubcarpetas([]);
-        }
-    };
+    const filteredEmpresas = empresas.filter(e =>
+        e.numero.toLowerCase().includes(search.toLowerCase()) ||
+        e.nombre.toLowerCase().includes(search.toLowerCase())
+    );
 
     if (loading) return <div>Cargando empresas...</div>;
     if (!empresas || empresas.length === 0) return <div>No hay empresas que mostrar</div>;
 
     return (
         <>
-            <div className="mb-4">
+            <div className="mb-4 flex items-center gap-4">
                 <button
                     className="bg-green-500 text-white px-4 py-2 rounded"
                     onClick={() => showModal("Crear nueva empresa", handleSave)}
                 >
                     Crear Empresa
                 </button>
+
+                <input
+                    type="text"
+                    placeholder="Buscar número o nombre..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="border px-2 py-1 rounded flex-1"
+                />
             </div>
 
             <table className="min-w-full bg-white/50 border">
@@ -116,7 +117,7 @@ export default function EmpresaTable({ filter, onAction }) {
                     </tr>
                 </thead>
                 <tbody>
-                    {empresas.map((e) => (
+                    {filteredEmpresas.map((e) => (
                         <tr key={e.id}>
                             <td className="border px-4 py-2">{e.id}</td>
                             <td className="border px-4 py-2">{e.numero}</td>
@@ -141,12 +142,12 @@ export default function EmpresaTable({ filter, onAction }) {
                                     className="bg-purple-500 text-white px-2 py-1 rounded"
                                 >
                                     Permisos
-                                </button>                                
+                                </button>
                             </td>
                         </tr>
                     ))}
                 </tbody>
-            </table>         
+            </table>            
 
             {/* Modal */}
             {modal.visible && (
