@@ -1,5 +1,5 @@
 // src/pages/admin/AdminDashboard.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/admin/Sidebar";
 import SummaryCards from "@/components/admin/SummaryCards";
@@ -16,22 +16,29 @@ export default function AdminDashboard({ usuario, rol, onLogout }) {
     const [selectedUserId, setSelectedUserId] = useState(null);
     const [selectedEmpresaId, setSelectedEmpresaId] = useState(null);
 
+    // Cada vez que cambie activeSection
+    useEffect(() => {
+        if (activeSection === "Permisos") {
+            // Resetear filtros cuando entramos a Permisos
+            setSelectedUserId(null);
+            setSelectedEmpresaId(null);
+        }
+    }, [activeSection]);
+
     const handleAction = (data) => {
         setRefreshKey(prev => prev + 1);
         setFilter(f => f);
+
         if (data?.section) setActiveSection(data.section);
+
         if (data?.userId) setSelectedUserId(data.userId);
         if (data?.empresaId) setSelectedEmpresaId(data.empresaId);
     };
 
     return (
         <div className="flex flex-col min-h-screen w-screen">
-            {/* Header dinámico */}
             <Header usuario={usuario} rol={rol} activeSection={activeSection} onLogout={onLogout} />
-
-            {/* Contenedor principal: sidebar + contenido */}
             <div className="flex flex-1 overflow-hidden">
-                {/* Sidebar lateral */}
                 <aside className="flex-shrink-0 overflow-auto w-64 min-w-[16rem]">
                     <Sidebar
                         usuario={usuario}
@@ -40,8 +47,6 @@ export default function AdminDashboard({ usuario, rol, onLogout }) {
                         setActiveSection={setActiveSection}
                     />
                 </aside>
-
-                {/* Contenido principal */}
                 <main className="flex-1 flex flex-col p-6 bg-pageGradient overflow-hidden">
                     {activeSection === "Usuarios" && (
                         <>
@@ -59,7 +64,6 @@ export default function AdminDashboard({ usuario, rol, onLogout }) {
                     {activeSection === "Permisos" && (
                         <div className="flex-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
                             <PermisosTable
-                                onAction={handleAction}
                                 initialUserId={selectedUserId}
                                 initialEmpresaId={selectedEmpresaId}
                             />
@@ -67,8 +71,6 @@ export default function AdminDashboard({ usuario, rol, onLogout }) {
                     )}
                 </main>
             </div>
-
-            {/* Footer siempre visible */}
             <Footer />
         </div>
     );

@@ -1,5 +1,6 @@
 // src/components/admin/UserTable.jsx
 import React, { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "@/api/api";
 
 export default function UserTable({ filter, onAction }) {
@@ -7,6 +8,7 @@ export default function UserTable({ filter, onAction }) {
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState({ visible: false, title: "", message: "", onConfirm: null });
     const containerRef = useRef(null);
+    const navigate = useNavigate();
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -81,8 +83,9 @@ export default function UserTable({ filter, onAction }) {
     };
 
     const goToPermisos = (user) => {
-        if (typeof onAction === "function") {
-            onAction({ section: "Permisos", userId: user.id });
+        if (onAction) {
+            // Forzamos que se reseteen los IDs de empresa
+            onAction({ section: "Permisos", userId: user.id, empresaId: null });
         }
     };
 
@@ -98,12 +101,12 @@ export default function UserTable({ filter, onAction }) {
             <table className="min-w-full bg-white/50 border">
                 <thead>
                     <tr>
-                        <th className="border px-4 py-2">ID</th>
-                        <th className="border px-4 py-2">Usuario</th>
-                        <th className="border px-4 py-2">Email</th>
-                        <th className="border px-4 py-2">Activo</th>
-                        <th className="border px-4 py-2">Rol</th>
-                        <th className="border px-4 py-2">Acciones</th>
+                        <th className="border px-4 py-2 text-left">ID</th>
+                        <th className="border px-4 py-2 text-left">Usuario</th>
+                        <th className="border px-4 py-2 text-left">Email</th>
+                        <th className="border px-4 py-2 text-left">Activo</th>
+                        <th className="border px-4 py-2 text-left">Rol</th>
+                        <th className="border px-4 py-2 text-left">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>

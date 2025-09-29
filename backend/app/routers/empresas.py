@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from typing import List
 from pydantic import BaseModel
+from app.models import UserPermiso
 import os
 
 from app.models import Empresa
@@ -106,13 +107,32 @@ async def check_folder(carpeta_base: str):
 
 # Obtener subcarpetas de una empresa
 @router.get("/{empresa_id}/subcarpetas")
-async def get_subcarpetas(empresa_id: int, db: AsyncSession = Depends(get_db)):
+async def get_subcarpetas(empresa_id: int, user_id: int = None, db: AsyncSession = Depends(get_db)):
+    import os
     result = await db.execute(select(Empresa).where(Empresa.id == empresa_id))
     empresa = result.scalar_one_or_none()
     if not empresa:
         raise HTTPException(404, "Empresa no encontrada")
+
     folder_path = os.path.join(STORAGE_PATH, empresa.carpeta_base)
     if not os.path.exists(folder_path):
         raise HTTPException(404, f"No existe la carpeta: {empresa.carpeta_base}")
+
     subcarpetas = [f for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]
+
+    if user_id:
+        res = await db.execute(
+            select(UserPermiso).where(
+                (UserPermiso.user_id == user_id) &
+                (UserPermiso.empresa_id == empresa_id)
+            )
+        )
+        permisos = res.scalars().all()
+        subcarpetas = [
+            {"name": s, "rol": next((p.rol for p in permisos if p.subcarpeta == s), "lector"), "checked": any(p.subcarpeta == s for p in permisos)}
+            for s in subcarpetas
+        ]
+    else:
+        subcarpetas = [{"name": s, "rol": "lector", "checked": False} for s in subcarpetas]
+
     return subcarpetas

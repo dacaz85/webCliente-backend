@@ -1,22 +1,17 @@
 // src/components/admin/EmpresaTable.jsx
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "@/api/api";
 
-export default function EmpresaTable({ filter, onAction, setActiveSection }) {
+export default function EmpresaTable({ filter, onAction }) {
     const [empresas, setEmpresas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState({ visible: false, title: "", onConfirm: null });
-
-    const [formData, setFormData] = useState({
-        numero: "",
-        nombre: "",
-        activo: true,
-    });
-
+    const [formData, setFormData] = useState({ numero: "", nombre: "", activo: true });
     const [editId, setEditId] = useState(null);
     const [subcarpetas, setSubcarpetas] = useState([]);
+    const navigate = useNavigate();
 
-    // Obtener empresas
     const fetchEmpresas = async () => {
         setLoading(true);
         try {
@@ -38,14 +33,9 @@ export default function EmpresaTable({ filter, onAction, setActiveSection }) {
         if (onAction) onAction();
     };
 
-    // Abrir modal
     const showModal = (title, onConfirm, empresa = null) => {
         if (empresa) {
-            setFormData({
-                numero: empresa.numero,
-                nombre: empresa.nombre,
-                activo: empresa.activo,
-            });
+            setFormData({ numero: empresa.numero, nombre: empresa.nombre, activo: empresa.activo });
             setEditId(empresa.id);
         } else {
             setFormData({ numero: "", nombre: "", activo: true });
@@ -60,47 +50,34 @@ export default function EmpresaTable({ filter, onAction, setActiveSection }) {
         setEditId(null);
     };
 
-    // Guardar empresa
     const handleSave = () => {
         if (!formData.numero || !formData.nombre) {
             alert("Número y nombre son obligatorios");
             return;
         }
-
         if (!/^\d{4}$/.test(formData.numero)) {
             alert("Número debe tener 4 dígitos numéricos");
             return;
         }
-
-        const dataToSend = {
-            ...formData,
-            carpeta_base: `${formData.numero} ${formData.nombre}`,
-        };
-
-        if (editId) {
-            handleAction(() => api.put(`/empresas/${editId}`, dataToSend));
-        } else {
-            handleAction(() => api.post("/empresas", dataToSend));
-        }
-
+        const dataToSend = { ...formData, carpeta_base: `${formData.numero} ${formData.nombre}` };
+        if (editId) handleAction(() => api.put(`/empresas/${editId}`, dataToSend));
+        else handleAction(() => api.post("/empresas", dataToSend));
         closeModal();
     };
 
-    // Eliminar empresa
     const handleDelete = (empresa) => {
         if (window.confirm(`¿Seguro que quieres eliminar la empresa "${empresa.nombre}"?`)) {
             handleAction(() => api.delete(`/empresas/${empresa.id}`));
         }
     };
 
-    // Redirigir a permisos filtrando por empresa
-    const handlePermisos = (empresaId) => {
-        if (setActiveSection) {
-            setActiveSection("Permisos", { empresaId });
+    const handlePermisos = (empresa) => {
+        if (onAction) {
+            // Forzamos que se reseteen los IDs de usuario
+            onAction({ section: "Permisos", userId: null, empresaId: empresa.id });
         }
     };
 
-    // Obtener subcarpetas desde backend
     const handleSubcarpetas = async (empresaId) => {
         try {
             const res = await api.get(`/empresas/${empresaId}/subcarpetas`);
@@ -130,12 +107,12 @@ export default function EmpresaTable({ filter, onAction, setActiveSection }) {
             <table className="min-w-full bg-white/50 border">
                 <thead>
                     <tr>
-                        <th className="border px-4 py-2">ID</th>
-                        <th className="border px-4 py-2">Número</th>
-                        <th className="border px-4 py-2">Nombre</th>
-                        <th className="border px-4 py-2">Carpeta Base</th>
-                        <th className="border px-4 py-2">Activo</th>
-                        <th className="border px-4 py-2">Acciones</th>
+                        <th className="border px-4 py-2 text-left">ID</th>
+                        <th className="border px-4 py-2 text-left">Número</th>
+                        <th className="border px-4 py-2 text-left">Nombre</th>
+                        <th className="border px-4 py-2 text-left">Carpeta Base</th>
+                        <th className="border px-4 py-2 text-left">Activo</th>
+                        <th className="border px-4 py-2 text-left">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -160,34 +137,16 @@ export default function EmpresaTable({ filter, onAction, setActiveSection }) {
                                     Eliminar
                                 </button>
                                 <button
-                                    onClick={() => handlePermisos(e.id)}
+                                    onClick={() => handlePermisos(e)}
                                     className="bg-purple-500 text-white px-2 py-1 rounded"
                                 >
                                     Permisos
-                                </button>
-                                <button
-                                    onClick={() => handleSubcarpetas(e.id)}
-                                    className="bg-blue-500 text-white px-2 py-1 rounded"
-                                >
-                                    Ver Subcarpetas
-                                </button>
+                                </button>                                
                             </td>
                         </tr>
                     ))}
                 </tbody>
-            </table>
-
-            {/* Mostrar subcarpetas */}
-            {subcarpetas.length > 0 && (
-                <div className="mt-4">
-                    <h4 className="font-bold">Subcarpetas:</h4>
-                    <ul className="list-disc ml-6">
-                        {subcarpetas.map((s, idx) => (
-                            <li key={idx}>{s}</li>
-                        ))}
-                    </ul>
-                </div>
-            )}
+            </table>         
 
             {/* Modal */}
             {modal.visible && (
