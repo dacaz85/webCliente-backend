@@ -16,11 +16,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    await init_models()
-
 # Routers
 app.include_router(login.router)
 app.include_router(register.router)

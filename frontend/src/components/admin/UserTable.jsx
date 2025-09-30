@@ -89,6 +89,7 @@ export default function UserTable({ filter, onAction }) {
         }
     };
 
+    // --- Filtrado ---
     const filteredUsers = users.filter(u =>
         u.username.toLowerCase().includes(search.toLowerCase()) ||
         u.email.toLowerCase().includes(search.toLowerCase())
@@ -99,6 +100,7 @@ export default function UserTable({ filter, onAction }) {
 
     return (
         <div className="flex flex-col">
+            {/* Input búsqueda */}
             <div className="flex items-center gap-4 mb-4">
                 <input
                     type="text"
@@ -114,26 +116,26 @@ export default function UserTable({ filter, onAction }) {
                 className="flex-1 overflow-auto"
                 style={{ maxHeight: 'calc(100vh - 16rem)' }}
             >
-                <table className="min-w-full bg-white/50 border">
-                    <thead>
+                <table className="min-w-full border-separate border-spacing-2">
+                    <thead className="bg-white/50">
                         <tr>
-                            <th className="border px-4 py-2 text-left">ID</th>
-                            <th className="border px-4 py-2 text-left">Usuario</th>
-                            <th className="border px-4 py-2 text-left">Email</th>
-                            <th className="border px-4 py-2 text-left">Activo</th>
-                            <th className="border px-4 py-2 text-left">Rol</th>
-                            <th className="border px-4 py-2 text-left">Acciones</th>
+                            <th className="px-4 py-2 text-left">ID</th>
+                            <th className="px-4 py-2 text-left">Usuario</th>
+                            <th className="px-4 py-2 text-left">Email</th>
+                            <th className="px-4 py-2 text-left">Activo</th>
+                            <th className="px-4 py-2 text-left">Rol</th>
+                            <th className="px-4 py-2 text-left">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
                         {filteredUsers.map(u => (
                             <tr key={u.id}>
-                                <td className="border px-4 py-2">{u.id}</td>
-                                <td className="border px-4 py-2">{u.username}</td>
-                                <td className="border px-4 py-2">{u.email}</td>
-                                <td className="border px-4 py-2">{u.activo ? "Sí" : "No"}</td>
-                                <td className="border px-4 py-2">{u.rol}</td>
-                                <td className="border px-4 py-2 flex gap-2 flex-wrap">
+                                <td className="px-4 py-2 border">{u.id}</td>
+                                <td className="px-4 py-2 border">{u.username}</td>
+                                <td className="px-4 py-2 border">{u.email}</td>
+                                <td className="px-4 py-2 border">{u.activo ? "Sí" : "No"}</td>
+                                <td className="px-4 py-2 border">{u.rol}</td>
+                                <td className="px-4 py-2 border flex gap-2 flex-wrap">
                                     {!u.activo && (
                                         <button
                                             onClick={() => validateUser(u.id)}

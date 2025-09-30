@@ -1,28 +1,41 @@
 // src/components/clientes/Sidebar.jsx
-import { Home, FileText, ShoppingCart } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 
-export default function Sidebar() {
-    const location = useLocation();
+export default function Sidebar({ permisos = [], activeSection, setActiveSection }) {
+    const navigate = useNavigate();
 
-    const menuItems = [
-        { name: "Inicio", icon: <Home size={18} />, path: "/cliente" },
-        { name: "Planos", icon: <FileText size={18} />, path: "/cliente/planos" },
-        { name: "Pedidos", icon: <ShoppingCart size={18} />, path: "/cliente/pedidos" },
-    ];
+    // Solo mostrar las subcarpetas que tengan checked === true
+    const availableSections = permisos
+        .filter(p => p.checked)
+        .map(p => p.name);
+
+    const handleClick = (section) => {
+        setActiveSection(section);
+        navigate(`/cliente/${section.toLowerCase()}`);
+    };
+
+    if (!availableSections.length) {
+        return <div className="p-4 text-gray-500">No tiene permisos asignados</div>;
+    }
 
     return (
-        <div className="w-60 h-screen bg-gray-100 p-4">
-            <h2 className="text-lg font-bold mb-6">Cliente Dashboard</h2>
-            <ul>
-                {menuItems.map((item) => (
-                    <li key={item.name} className={`mb-3 ${location.pathname === item.path ? "font-bold" : ""}`}>
-                        <Link to={item.path} className="flex items-center gap-2">
-                            {item.icon} {item.name}
-                        </Link>
-                    </li>
+        <aside className="w-64 min-w-[16rem] bg-pageGradientInverse shadow-md flex flex-col h-full p-6">
+            <div className="mb-8 text-lg font-semibold">Panel Cliente</div>
+            <nav className="flex flex-col gap-4">
+                {availableSections.map((section) => (
+                    <button
+                        key={section}
+                        onClick={() => handleClick(section)}
+                        className={`flex items-center gap-2 text-left px-2 py-1 rounded ${activeSection === section
+                                ? "bg-blue-100 font-semibold"
+                                : "hover:text-blue-600"
+                            }`}
+                    >
+                        {section}
+                    </button>
                 ))}
-            </ul>
-        </div>
+            </nav>
+        </aside>
     );
 }

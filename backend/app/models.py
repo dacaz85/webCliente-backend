@@ -46,8 +46,3 @@ class UserPermiso(Base):
     rol = Column(Enum("lector", "editor"), default="lector")  # rol por subcarpeta
     fecha_asignacion = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
-class Plano(Base):
-    __tablename__ = "planos"
-    id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(100))
-    descripcion = Column(String(255))

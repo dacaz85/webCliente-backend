@@ -105,8 +105,8 @@ export default function EmpresaTable({ filter, onAction }) {
                 />
             </div>
 
-            <table className="min-w-full bg-white/50 border">
-                <thead>
+            <table className="min-w-full border-separate border-spacing-0.5">
+                <thead className="bg-white/50">
                     <tr>
                         <th className="border px-4 py-2 text-left">ID</th>
                         <th className="border px-4 py-2 text-left">Número</th>
@@ -116,7 +116,7 @@ export default function EmpresaTable({ filter, onAction }) {
                         <th className="border px-4 py-2 text-left">Acciones</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
                     {filteredEmpresas.map((e) => (
                         <tr key={e.id}>
                             <td className="border px-4 py-2">{e.id}</td>

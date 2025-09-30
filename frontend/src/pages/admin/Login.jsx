@@ -18,12 +18,12 @@ export default function Login({ onLogin }) {
 
         try {
             const res = await api.post("/login/", { username, password });
-            const { access_token, rol } = res.data;
+            const { access_token, rol, id } = res.data;
 
             localStorage.setItem("token", access_token);
             localStorage.setItem("rol", rol);
 
-            if (onLogin) onLogin(username, rol, username);
+            if (onLogin) onLogin({ id, username, rol, token: access_token });
 
             if (rol === "admin") navigate("/admin");
             else if (rol === "cliente") navigate("/cliente");

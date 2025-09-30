@@ -1,4 +1,4 @@
-// src/App.jsx
+//src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useState } from "react";
 
@@ -13,18 +13,22 @@ import { setToken } from "@/api/api";
 export default function App() {
     const [userLogged, setUserLogged] = useState(false);
     const [userRol, setUserRol] = useState(""); // 'admin' o 'cliente'
-    const [user, setUser] = useState(""); // nombre de usuario
+    const [usuario, setUsuario] = useState({ id: null, username: "" });
 
-    const handleLogin = (usuario, rol, nombre) => {
+    const handleLogin = (userData) => {
         setUserLogged(true);
-        setUserRol(rol);
-        setUser(nombre || usuario);
+        setUserRol(userData.rol || "");
+        setUsuario({
+            id: userData.id || null,
+            username: userData.username || userData.user || "Usuario"
+        });
+        setToken(userData.token || null);
     };
 
     const handleLogout = () => {
         setUserLogged(false);
         setUserRol("");
-        setUser("");
+        setUsuario({ id: null, username: "" });
         setToken(null);
     };
 
@@ -54,7 +58,11 @@ export default function App() {
                     path="/admin/*"
                     element={
                         userLogged && userRol === "admin"
-                            ? <AdminDashboard usuario={user} rol={userRol} onLogout={handleLogout} />
+                            ? <AdminDashboard
+                                usuario={usuario}
+                                rol={userRol}
+                                onLogout={handleLogout}
+                            />
                             : <Navigate to="/" />
                     }
                 />
@@ -64,7 +72,11 @@ export default function App() {
                     path="/cliente/*"
                     element={
                         userLogged && userRol === "cliente"
-                            ? <ClienteDashboard usuario={user} rol={userRol} onLogout={handleLogout} />
+                            ? <ClienteDashboard
+                                usuario={usuario}
+                                rol={userRol}
+                                onLogout={handleLogout}
+                            />
                             : <Navigate to="/" />
                     }
                 >

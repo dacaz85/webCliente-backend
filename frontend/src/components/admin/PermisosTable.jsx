@@ -215,8 +215,8 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
 
             {!loading && permisos.length > 0 && (
                 <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
-                    <table className="min-w-full bg-white/50 border">
-                        <thead>
+                    <table className="min-w-full border-separate border-spacing-0.5">
+                        <thead className="bg-white/50">
                             <tr>
                                 <th className="border px-4 py-2 text-left">Usuario</th>
                                 <th className="border px-4 py-2 text-left">Email</th>
@@ -226,7 +226,7 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                                 <th className="border px-4 py-2 text-left">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
                             {permisos.map((p) => (
                                 <tr key={p.id}>
                                     <td className="border px-4 py-2">{p.username || "—"}</td>

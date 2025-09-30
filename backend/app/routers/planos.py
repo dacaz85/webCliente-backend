@@ -1,22 +1,63 @@
 # app/routers/planos.py
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
-from pydantic import BaseModel
-
-from app.models import Plano
 from app.utils.deps import get_db
+from app.models import Empresa, UserPermiso
+import os
 
 router = APIRouter(prefix="/planos", tags=["planos"])
 
-class PlanoResponse(BaseModel):
-    id: int
-    nombre: str
-    precio: float
+STORAGE_PATH = os.getenv("STORAGE_PATH", "R:\\")  # Ruta al NAS o unidad montada
 
-@router.get("/", response_model=List[PlanoResponse])
-async def get_planos(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Plano))
-    planos = result.scalars().all()
-    return planos
+@router.get("/")
+async def list_files(
+    empresa_id: int = Query(None, description="ID de la empresa"),
+    empresa_nombre: str = Query(None, description="Nombre de la empresa"),
+    subcarpeta: str = Query(..., description="Subcarpeta de la empresa"),
+    db: AsyncSession = Depends(get_db)
+):
+    if not empresa_id and not empresa_nombre:
+        raise HTTPException(400, "Debes indicar empresa_id o empresa_nombre")
+
+    # Buscar empresa por ID o nombre
+    if empresa_id:
+        result = await db.execute(select(Empresa).where(Empresa.id == empresa_id))
+    else:
+        result = await db.execute(select(Empresa).where(Empresa.nombre == empresa_nombre))
+    empresa = result.scalar_one_or_none()
+    if not empresa:
+        raise HTTPException(404, "Empresa no encontrada")
+
+    # Construir ruta de la empresa
+    empresa_path = os.path.join(STORAGE_PATH, empresa.carpeta_base)
+    if not os.path.exists(empresa_path):
+        raise HTTPException(404, f"No existe la carpeta de la empresa: {empresa.carpeta_base}")
+
+    # Comprobar que la subcarpeta existe dentro de la empresa
+    subcarpetas_disponibles = [f for f in os.listdir(empresa_path) if os.path.isdir(os.path.join(empresa_path, f))]
+    if subcarpeta not in subcarpetas_disponibles:
+        raise HTTPException(404, f"Subcarpeta '{subcarpeta}' no encontrada. Subcarpetas disponibles: {subcarpetas_disponibles}")
+
+    folder_path = os.path.join(empresa_path, subcarpeta)
+
+    # Listar archivos dinámicamente
+    files = [
+        {"name": f, "url": f"/planos/download/{empresa.id}/{subcarpeta}/{f}"}
+        for f in os.listdir(folder_path)
+        if os.path.isfile(os.path.join(folder_path, f)) and f.lower().endswith((".jpg", ".jpeg", ".pdf"))
+    ]
+    return files
+
+@router.get("/download/{empresa_id}/{subcarpeta}/{filename}")
+async def download_file(empresa_id: int, subcarpeta: str, filename: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Empresa).where(Empresa.id == empresa_id))
+    empresa = result.scalar_one_or_none()
+    if not empresa:
+        raise HTTPException(404, "Empresa no encontrada")
+
+    file_path = os.path.join(STORAGE_PATH, empresa.carpeta_base, subcarpeta, filename)
+    if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        raise HTTPException(404, "Archivo no encontrado")
+    return FileResponse(file_path, filename=filename)

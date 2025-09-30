@@ -19,6 +19,10 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str
     rol: str
+    id: int
+    username: str
+    empresa_id: int | None = None  # solo para clientes
+    empresa_nombre: str | None = None
 
 @router.post("/", response_model=LoginResponse)
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
@@ -41,6 +45,25 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     # Crear token
-    token = create_access_token({"user_id": user.id, "rol": user.rol.value})
+    token_data = {"user_id": user.id, "rol": user.rol.value}
+    token = create_access_token(token_data)
 
-    return {"access_token": token, "token_type": "bearer", "rol": user.rol.value}
+    # Solo los clientes tienen empresa_id y empresa_nombre
+    empresa_id = None
+    empresa_nombre = None
+    if user.rol.value == "cliente":
+        # Aquí puedes cargar la empresa asociada si tu modelo lo permite
+        # ejemplo:
+        if hasattr(user, "empresa_id"):
+            empresa_id = user.empresa_id
+            empresa_nombre = getattr(user, "empresa_nombre", None)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "rol": user.rol.value,
+        "id": user.id,
+        "username": user.username,
+        "empresa_id": empresa_id,
+        "empresa_nombre": empresa_nombre,
+    }

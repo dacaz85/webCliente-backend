@@ -5,7 +5,10 @@ export default function Header({ usuario, rol, activeSection, onLogout }) {
     const isLogged = !!usuario && !!onLogout;
 
     // Título central según rol
-    const centralTitle = rol === "admin" ? activeSection || "Panel Administrador" : "Portal Clientes";
+    const centralTitle =
+        rol === "admin"
+            ? activeSection || "Panel Administrador"
+            : "Portal Clientes";
 
     return (
         <header className="h-16 flex items-center justify-between p-4 shadow-md font-sans bg-[#dc8502] z-10">
@@ -22,10 +25,12 @@ export default function Header({ usuario, rol, activeSection, onLogout }) {
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
-                            {usuario?.charAt(0).toUpperCase() || "U"}
+                            {(typeof usuario === "string"
+                                ? usuario.charAt(0).toUpperCase()
+                                : "U")}
                         </div>
                         <div className="text-md">
-                            <div className="font-medium">{usuario}</div>
+                            <div className="font-medium">{typeof usuario === "string" ? usuario : usuario?.username || "Usuario"}</div>
                             <div className="text-s text-slate-500">{rol}</div>
                         </div>
                     </div>

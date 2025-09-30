@@ -1,25 +1,55 @@
-// src/pages/clientes/Planos.jsx
-import { useEffect, useState } from "react";
+// src/components/clientes/Planos.jsx
+import React, { useEffect, useState } from "react";
 import api from "@/api/api";
+import { useSearchParams } from "react-router-dom";
 
-export default function Planos() {
-    const [planos, setPlanos] = useState([]);
+export default function Planos({ usuario }) {
+    const [searchParams] = useSearchParams();
+    const empresaNombre = searchParams.get("empresa_nombre");
+    const subcarpeta = searchParams.get("subcarpeta");
+
+    const [files, setFiles] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
-        api.get("/planos/empresas")
-            .then(res => setPlanos(res.data))
-            .catch(err => console.error(err));
-    }, []);
+        const fetchFiles = async () => {
+            if (!empresaNombre || !subcarpeta) return;
+
+            try {
+                setLoading(true);
+                setError("");
+                const res = await api.get("/planos/", {
+                    params: { empresa_nombre: empresaNombre, subcarpeta },
+                });
+                setFiles(res.data);
+            } catch (err) {
+                console.error("Error cargando planos:", err);
+                setError("No se pudieron cargar los archivos.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchFiles();
+    }, [empresaNombre, subcarpeta]);
+
+    if (loading) return <div>Cargando archivos...</div>;
+    if (error) return <div>{error}</div>;
+    if (!files.length) return <div>No hay archivos en esta subcarpeta.</div>;
 
     return (
-        <div className="p-4">
-            <h2 className="text-xl font-bold mb-4">Planos disponibles</h2>
-            {planos.map((p) => (
-                <div key={p.id} className="mb-6">
-                    <h3 className="font-semibold">{p.nombre}</h3>
-                    <ul className="list-disc list-inside">
-                        {p.files?.map((archivo, i) => <li key={i}>{archivo}</li>)}
-                    </ul>
+        <div className="grid grid-cols-3 gap-4">
+            {files.map((file) => (
+                <div key={file.name} className="p-2 border rounded">
+                    <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                    >
+                        {file.name}
+                    </a>
                 </div>
             ))}
         </div>
