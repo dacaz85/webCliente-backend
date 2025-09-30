@@ -240,8 +240,7 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                                             className="border px-2 py-1 rounded"
                                         >
                                             <option value="lector">Lector</option>
-                                            <option value="editor">Editor</option>
-                                            <option value="admin">Admin</option>
+                                            <option value="editor">Editor</option>                                            
                                         </select>
                                     </td>
                                     <td className="border px-4 py-2">

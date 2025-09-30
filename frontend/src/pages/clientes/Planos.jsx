@@ -1,56 +1,56 @@
-// src/components/clientes/Planos.jsx
+// src/pages/clientes/Planos.jsx
 import React, { useEffect, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import api from "@/api/api";
-import { useSearchParams } from "react-router-dom";
 
-export default function Planos({ usuario }) {
-    const [searchParams] = useSearchParams();
-    const empresaNombre = searchParams.get("empresa_nombre");
-    const subcarpeta = searchParams.get("subcarpeta");
-
+export default function Planos() {
+    const { activeSection, permisoActivo } = useOutletContext();
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     useEffect(() => {
         const fetchFiles = async () => {
-            if (!empresaNombre || !subcarpeta) return;
+            if (!permisoActivo) return;
+
+            setLoading(true);
+            setError("");
 
             try {
-                setLoading(true);
-                setError("");
-                const res = await api.get("/planos/", {
-                    params: { empresa_nombre: empresaNombre, subcarpeta },
+                const res = await api.get("/planos", {
+                    params: {
+                        empresa_id: permisoActivo.empresa_id,
+                        subcarpeta: permisoActivo.subcarpeta,
+                    },
                 });
                 setFiles(res.data);
             } catch (err) {
-                console.error("Error cargando planos:", err);
-                setError("No se pudieron cargar los archivos.");
+                console.error(err);
+                setError("Error al cargar los archivos");
             } finally {
                 setLoading(false);
             }
         };
 
         fetchFiles();
-    }, [empresaNombre, subcarpeta]);
+    }, [activeSection, permisoActivo]);
 
     if (loading) return <div>Cargando archivos...</div>;
-    if (error) return <div>{error}</div>;
-    if (!files.length) return <div>No hay archivos en esta subcarpeta.</div>;
+    if (error) return <div className="text-red-600">{error}</div>;
+    if (!files || files.length === 0) return <div>No hay archivos en esta subcarpeta</div>;
 
     return (
-        <div className="grid grid-cols-3 gap-4">
-            {files.map((file) => (
-                <div key={file.name} className="p-2 border rounded">
-                    <a
-                        href={file.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                    >
-                        {file.name}
-                    </a>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {files.map((f) => (
+                <a
+                    key={f.name}
+                    href={f.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-4 border rounded shadow hover:bg-gray-100"
+                >
+                    {f.name}
+                </a>
             ))}
         </div>
     );
