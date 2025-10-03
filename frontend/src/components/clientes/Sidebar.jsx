@@ -1,38 +1,58 @@
+// src/components/clientes/Sidebar.jsx
 import React from "react";
-import { useNavigate } from "react-router-dom";
-import { FileText, ShoppingCart } from "lucide-react";
 
-export default function Sidebar({ permisos = [], activeSection, setActiveSection }) {
-    const navigate = useNavigate();
+export default function Sidebar({
+    empresas,
+    empresaSeleccionada,
+    setEmpresaSeleccionada,
+    subcarpetaSeleccionada,
+    setSubcarpetaSeleccionada
+}) {
+    // Mapa subcarpeta → empresas
+    const subcarpetasMap = {};
+    empresas.forEach((empresa) => {
+        empresa.subcarpetas.forEach((sub) => {
+            if (!subcarpetasMap[sub.name]) subcarpetasMap[sub.name] = [];
+            subcarpetasMap[sub.name].push(empresa);
+        });
+    });
 
-    if (!permisos || permisos.length === 0) return null;
+    const handleEmpresaClick = (subName, empresa) => {
+        setSubcarpetaSeleccionada({ name: subName });
+        setEmpresaSeleccionada(empresa);
+    };
 
     return (
-        <aside className="w-64 min-w-[16rem] bg-pageGradientInverse shadow-md flex flex-col h-full p-6">
-            <div className="mb-8">
-                <div className="text-lg font-semibold">Panel Cliente</div>
-            </div>
-
-            <nav className="flex flex-col gap-4">
-                {permisos.map((p) => {
-                    const isActive = activeSection === p.subcarpeta;
-                    let icon = <FileText size={20} />;
-                    if (p.subcarpeta.toLowerCase() === "pedidos") icon = <ShoppingCart size={20} />;
-
-                    return (
-                        <button
-                            key={p.subcarpeta}
-                            onClick={() => {
-                                setActiveSection(p.subcarpeta);
-                                navigate(`/cliente/${p.subcarpeta.toLowerCase()}`);
-                            }}
-                            className={`flex items-center gap-2 px-2 py-1 rounded ${isActive ? "bg-blue-100 font-semibold" : "hover:text-blue-600"}`}
+        <aside className="w-64 bg-pageGradientInverse p-6 flex flex-col h-full gap-4 overflow-auto">
+            <h2 className="text-lg font-bold mb-4">Panel Cliente</h2>
+            <ul>
+                {Object.entries(subcarpetasMap).map(([subName, associatedEmpresas]) => (
+                    <li key={subName}>
+                        <div
+                            className={`px-2 py-1 mb-1 font-semibold ${subcarpetaSeleccionada?.name === subName ? "bg-blue-500 text-white rounded" : ""
+                                }`}
                         >
-                            {icon} {p.subcarpeta}
-                        </button>
-                    );
-                })}
-            </nav>
+                            {subName}
+                        </div>
+                        <ul className="ml-4 mt-1">
+                            {associatedEmpresas.map((empresa) => (
+                                <li key={empresa.empresa_id}>
+                                    <button
+                                        onClick={() => handleEmpresaClick(subName, empresa)}
+                                        className={`w-full text-left px-2 py-1 rounded mb-1 ${empresaSeleccionada?.empresa_id === empresa.empresa_id &&
+                                                subcarpetaSeleccionada?.name === subName
+                                                ? "bg-blue-300 font-semibold"
+                                                : "hover:bg-blue-50"
+                                            }`}
+                                    >
+                                        {empresa.empresa_nombre}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </li>
+                ))}
+            </ul>
         </aside>
     );
 }

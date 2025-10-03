@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import SummaryCards from "@/components/admin/SummaryCards";
 import UserTable from "@/components/admin/UserTable";
 
+// Páginas adaptadas a URL; no se necesita useParams aquí porque AdminDashboard maneja el Outlet
 export default function Usuarios() {
     const [filter, setFilter] = useState("todos");
     const [refreshKey, setRefreshKey] = useState(0);

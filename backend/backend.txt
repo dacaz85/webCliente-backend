@@ -1,0 +1,865 @@
+
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\routers\empresas.py ====
+
+# app/routers/empresas.py
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from typing import List
+from pydantic import BaseModel
+from app.models import UserPermiso
+import os
+
+from app.models import Empresa
+from app.utils.deps import get_db
+
+router = APIRouter(prefix="/empresas", tags=["empresas"])
+
+STORAGE_PATH = os.getenv("STORAGE_PATH", "R:\\")  # Ruta al NAS o unidad montada
+
+class EmpresaResponse(BaseModel):
+    id: int
+    numero: str
+    nombre: str
+    carpeta_base: str
+    activo: bool
+    fecha_creacion: str
+
+class EmpresaCreateUpdate(BaseModel):
+    numero: str
+    nombre: str
+    activo: bool = True
+
+# Obtener todas las empresas
+@router.get("/all", response_model=List[EmpresaResponse])
+async def get_empresas(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Empresa))
+    empresas = result.scalars().all()
+    return [
+        EmpresaResponse(
+            id=e.id,
+            numero=e.numero,
+            nombre=e.nombre,
+            carpeta_base=e.carpeta_base,
+            activo=bool(e.activo),
+            fecha_creacion=str(e.fecha_creacion)
+        ) for e in empresas
+    ]
+
+# Crear empresa
+@router.post("/", response_model=EmpresaResponse)
+async def create_empresa(data: EmpresaCreateUpdate, db: AsyncSession = Depends(get_db)):
+    if len(data.numero) != 4 or not data.numero.isdigit():
+        raise HTTPException(400, "El número de empresa debe tener 4 dígitos")
+    carpeta_base = f"{data.numero} {data.nombre}"
+    empresa = Empresa(numero=data.numero, nombre=data.nombre, activo=data.activo, carpeta_base=carpeta_base)
+    db.add(empresa)
+    await db.commit()
+    await db.refresh(empresa)
+    return EmpresaResponse(
+        id=empresa.id,
+        numero=empresa.numero,
+        nombre=empresa.nombre,
+        carpeta_base=empresa.carpeta_base,
+        activo=bool(empresa.activo),
+        fecha_creacion=str(empresa.fecha_creacion)
+    )
+
+# Actualizar empresa
+@router.put("/{empresa_id}", response_model=EmpresaResponse)
+async def update_empresa(empresa_id: int, data: EmpresaCreateUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Empresa).where(Empresa.id == empresa_id))
+    empresa = result.scalar_one_or_none()
+    if not empresa:
+        raise HTTPException(404, "Empresa no encontrada")
+    if len(data.numero) != 4 or not data.numero.isdigit():
+        raise HTTPException(400, "El número de empresa debe tener 4 dígitos")
+    empresa.numero = data.numero
+    empresa.nombre = data.nombre
+    empresa.activo = data.activo
+    empresa.carpeta_base = f"{data.numero} {data.nombre}"
+    db.add(empresa)
+    await db.commit()
+    await db.refresh(empresa)
+    return EmpresaResponse(
+        id=empresa.id,
+        numero=empresa.numero,
+        nombre=empresa.nombre,
+        carpeta_base=empresa.carpeta_base,
+        activo=bool(empresa.activo),
+        fecha_creacion=str(empresa.fecha_creacion)
+    )
+
+# Borrar empresa
+@router.delete("/{empresa_id}", response_model=dict)
+async def delete_empresa(empresa_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Empresa).where(Empresa.id == empresa_id))
+    empresa = result.scalar_one_or_none()
+    if not empresa:
+        raise HTTPException(404, "Empresa no encontrada")
+    await db.execute(delete(Empresa).where(Empresa.id == empresa_id))
+    await db.commit()
+    return {"msg": f"Empresa {empresa.nombre} eliminada"}
+
+# Verificar existencia de carpeta
+@router.get("/check_folder")
+async def check_folder(carpeta_base: str):
+    folder_path = os.path.join(STORAGE_PATH, carpeta_base)
+    exists = os.path.exists(folder_path)
+    return {"carpeta_base": carpeta_base, "exists": exists}
+
+# Obtener subcarpetas de una empresa
+@router.get("/{empresa_id}/subcarpetas")
+async def get_subcarpetas(empresa_id: int, user_id: int = None, db: AsyncSession = Depends(get_db)):
+    import os
+    result = await db.execute(select(Empresa).where(Empresa.id == empresa_id))
+    empresa = result.scalar_one_or_none()
+    if not empresa:
+        raise HTTPException(404, "Empresa no encontrada")
+
+    folder_path = os.path.join(STORAGE_PATH, empresa.carpeta_base)
+    if not os.path.exists(folder_path):
+        raise HTTPException(404, f"No existe la carpeta: {empresa.carpeta_base}")
+
+    subcarpetas = [f for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]
+
+    if user_id:
+        res = await db.execute(
+            select(UserPermiso).where(
+                (UserPermiso.user_id == user_id) &
+                (UserPermiso.empresa_id == empresa_id)
+            )
+        )
+        permisos = res.scalars().all()
+        subcarpetas = [
+            {"name": s, "rol": next((p.rol for p in permisos if p.subcarpeta == s), "lector"), "checked": any(p.subcarpeta == s for p in permisos)}
+            for s in subcarpetas
+        ]
+    else:
+        subcarpetas = [{"name": s, "rol": "lector", "checked": False} for s in subcarpetas]
+
+    return subcarpetas
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\routers\login.py ====
+
+# app/routers/login.py
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+from pydantic import BaseModel
+from datetime import datetime, timedelta
+
+from app.models import User
+from app.utils.deps import get_db
+from app.auth import verify_password, create_access_token
+
+router = APIRouter(prefix="/login", tags=["login"])
+
+# Define el tiempo de sesión en minutos
+SESSION_EXPIRE_MINUTES = 15
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    rol: str
+    id: int
+    username: str
+    empresa_id: int | None = None  # solo para clientes
+    empresa_nombre: str | None = None
+
+@router.post("/", response_model=LoginResponse)
+async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    # Buscar usuario
+    stmt = select(User).where(User.username == data.username)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    # Validar contraseña
+    if not user or not verify_password(data.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrecta")
+
+    # Actualizar ultimo_login
+    stmt_update = (
+        update(User)
+        .where(User.id == user.id)
+        .values(ultimo_login=datetime.utcnow())
+    )
+    await db.execute(stmt_update)
+    await db.commit()
+
+    # Crear token con expiración
+    expire = datetime.utcnow() + timedelta(minutes=SESSION_EXPIRE_MINUTES)
+    token_data = {
+        "user_id": user.id,
+        "rol": user.rol.value,
+        "exp": int(expire.timestamp())  # expiración en segundos, entero
+    }
+    token = create_access_token(token_data)
+
+    # Solo los clientes tienen empresa_id y empresa_nombre
+    empresa_id = None
+    empresa_nombre = None
+    if user.rol.value == "cliente":
+        if hasattr(user, "empresa_id"):
+            empresa_id = user.empresa_id
+            empresa_nombre = getattr(user, "empresa_nombre", None)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "rol": user.rol.value,
+        "id": user.id,
+        "username": user.username,
+        "empresa_id": empresa_id,
+        "empresa_nombre": empresa_nombre,
+    }
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\routers\planos.py ====
+
+# app/routers/planos.py
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.utils.deps import get_db
+from app.models import Empresa, UserPermiso
+import os
+
+router = APIRouter(prefix="/planos", tags=["planos"])
+
+STORAGE_PATH = os.getenv("STORAGE_PATH", "R:\\")  # Ruta al NAS o unidad montada
+
+@router.get("/")
+async def list_files(
+    empresa_id: int = Query(None, description="ID de la empresa"),
+    empresa_nombre: str = Query(None, description="Nombre de la empresa"),
+    subcarpeta: str = Query(..., description="Subcarpeta de la empresa"),
+    db: AsyncSession = Depends(get_db)
+):
+    if not empresa_id and not empresa_nombre:
+        raise HTTPException(400, "Debes indicar empresa_id o empresa_nombre")
+
+    # Buscar empresa por ID o nombre
+    if empresa_id:
+        result = await db.execute(select(Empresa).where(Empresa.id == empresa_id))
+    else:
+        result = await db.execute(select(Empresa).where(Empresa.nombre == empresa_nombre))
+    empresa = result.scalar_one_or_none()
+    if not empresa:
+        raise HTTPException(404, "Empresa no encontrada")
+
+    # Construir ruta de la empresa
+    empresa_path = os.path.join(STORAGE_PATH, empresa.carpeta_base)
+    if not os.path.exists(empresa_path):
+        raise HTTPException(404, f"No existe la carpeta de la empresa: {empresa.carpeta_base}")
+
+    # Comprobar que la subcarpeta existe dentro de la empresa
+    subcarpetas_disponibles = [f for f in os.listdir(empresa_path) if os.path.isdir(os.path.join(empresa_path, f))]
+    if subcarpeta not in subcarpetas_disponibles:
+        raise HTTPException(404, f"Subcarpeta '{subcarpeta}' no encontrada. Subcarpetas disponibles: {subcarpetas_disponibles}")
+
+    folder_path = os.path.join(empresa_path, subcarpeta)
+
+    # Listar archivos dinámicamente
+    files = [
+        {"name": f, "url": f"/planos/download/{empresa.id}/{subcarpeta}/{f}"}
+        for f in os.listdir(folder_path)
+        if os.path.isfile(os.path.join(folder_path, f)) and f.lower().endswith((".jpg", ".jpeg", ".pdf"))
+    ]
+    return files
+
+@router.get("/download/{empresa_id}/{subcarpeta}/{filename}")
+async def download_file(empresa_id: int, subcarpeta: str, filename: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Empresa).where(Empresa.id == empresa_id))
+    empresa = result.scalar_one_or_none()
+    if not empresa:
+        raise HTTPException(404, "Empresa no encontrada")
+
+    file_path = os.path.join(STORAGE_PATH, empresa.carpeta_base, subcarpeta, filename)
+    if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        raise HTTPException(404, "Archivo no encontrado")
+    return FileResponse(file_path, filename=filename)
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\routers\register.py ====
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from app.schemas import UserCreate, UserResponse
+from app.utils.deps import get_db
+from app.models import User, RolEnum
+from app.auth import get_password_hash
+
+router = APIRouter(prefix="/register", tags=["register"])
+
+@router.post("/", response_model=UserResponse)
+async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
+    # Verificar si username o email ya existen
+    result = await db.execute(
+        text("SELECT * FROM users WHERE username=:username OR email=:email"),
+        {"username": user.username, "email": user.email}
+    )
+    existing_user = result.scalars().first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username o email ya registrado")
+
+    # Crear el usuario (siempre rol cliente para frontend)
+    new_user = User(
+        username=user.username,
+        email=user.email,
+        password_hash=get_password_hash(user.password),
+        rol=RolEnum.cliente,
+        activo=0
+    )
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)  # ahora fecha_creacion se rellena automáticamente
+
+    return new_user
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\routers\users.py ====
+
+# app/routers/users.py
+import secrets
+import string
+
+from fastapi import APIRouter, Depends, HTTPException, Body
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, delete
+from typing import List
+from pydantic import BaseModel
+import random, string
+
+from app.schemas import UserResponse
+from app.auth import get_password_hash, verify_password
+from app.models import User
+from app.utils.deps import get_db
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    rol: str
+    activo: bool
+
+class PasswordResetResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    temp_password: str
+
+class RoleUpdateRequest(BaseModel):
+    role: str
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+# Obtener todos los usuarios
+@router.get("/all", response_model=List[UserResponse])
+async def get_users_all(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User))
+    users = result.scalars().all()
+    response = [
+        UserResponse(
+            id=u.id,
+            username=u.username,
+            email=u.email,
+            rol=u.rol.value if hasattr(u.rol, "value") else str(u.rol),
+            activo=bool(u.activo)
+        ) for u in users
+    ]
+    return response
+
+# Validar usuario (poner activo=True)
+@router.post("/{user_id}/validate", response_model=UserResponse)
+async def validate_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    user.activo = 1
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        rol=user.rol.value if hasattr(user.rol, "value") else str(user.rol),
+        activo=bool(user.activo)
+    )
+
+# Eliminar usuario
+@router.delete("/{user_id}", response_model=dict)
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    await db.execute(delete(User).where(User.id == user_id))
+    await db.commit()
+
+    return {"msg": f"Usuario {user.username} eliminado"}
+
+# Reset password
+@router.post("/{user_id}/reset-password", response_model=PasswordResetResponse)
+async def reset_password(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # generar una contraseña temporal (10 caracteres alfanuméricos)
+    temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(10))
+    user.hashed_password = get_password_hash(temp_password)
+
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return PasswordResetResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        temp_password=temp_password  # se muestra solo al admin
+    )
+
+# Modificar rol de usuario
+@router.post("/{user_id}/set-role", response_model=UserResponse)
+async def set_role(user_id: int, data: RoleUpdateRequest, db: AsyncSession = Depends(get_db)):
+    role = data.role
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(404, "Usuario no encontrado")
+    if role not in ["admin", "cliente"]:
+        raise HTTPException(400, "Rol no válido")
+    user.rol = role
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        rol=user.rol,
+        activo=user.activo
+    )
+
+# Modificar password
+@router.post("/{user_id}/change-password")
+async def change_password(user_id: int, data: ChangePasswordRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if not verify_password(data.old_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
+
+    user.password_hash = get_password_hash(data.new_password)
+    db.add(user)
+    await db.commit()
+
+    return {"msg": "Contraseña actualizada correctamente"}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\routers\user_permisos.py ====
+
+# app/routers/user_permisos.py
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from typing import List, Optional
+from pydantic import BaseModel
+
+from app.models import UserPermiso, User, Empresa
+from app.utils.deps import get_db
+
+router = APIRouter(prefix="/user_permisos", tags=["user_permisos"])
+
+# --- SCHEMAS ---
+class SubcarpetaPermiso(BaseModel):
+    name: str
+    rol: str = "lector"
+
+class UserPermisoResponse(BaseModel):
+    id: int
+    user_id: int
+    username: str
+    email: str
+    empresa_id: int
+    empresa_nombre: str
+    subcarpeta: str
+    rol: str
+    fecha_asignacion: str
+
+class UserPermisoCreateUpdate(BaseModel):
+    user_id: int
+    empresa_id: int
+    subcarpetas: List[SubcarpetaPermiso]
+
+class UserPermisoUpdateRole(BaseModel):
+    rol: str
+
+# --- ROUTES ---
+@router.get("/", response_model=List[UserPermisoResponse])
+async def get_permisos(
+    user_id: Optional[int] = Query(None),
+    empresa_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(UserPermiso)
+    if user_id:
+        query = query.where(UserPermiso.user_id == user_id)
+    if empresa_id:
+        query = query.where(UserPermiso.empresa_id == empresa_id)
+
+    result = await db.execute(query)
+    permisos = result.scalars().all()
+
+    # Cargar usuarios y empresas relacionados
+    user_ids = {p.user_id for p in permisos}
+    empresa_ids = {p.empresa_id for p in permisos}
+
+    users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
+    users = {u.id: u for u in users_res.scalars().all()}
+
+    empresas_res = await db.execute(select(Empresa).where(Empresa.id.in_(empresa_ids)))
+    empresas = {e.id: e for e in empresas_res.scalars().all()}
+
+    # Filtrado por search (usuario, email, empresa)
+    if search:
+        permisos = [
+            p for p in permisos
+            if search.lower() in (users.get(p.user_id).username.lower() if users.get(p.user_id) else "")
+            or search.lower() in (users.get(p.user_id).email.lower() if users.get(p.user_id) else "")
+            or search.lower() in (empresas.get(p.empresa_id).nombre.lower() if empresas.get(p.empresa_id) else "")
+        ]
+
+    return [
+        UserPermisoResponse(
+            id=p.id,
+            user_id=p.user_id,
+            username=users.get(p.user_id).username if users.get(p.user_id) else "",
+            email=users.get(p.user_id).email if users.get(p.user_id) else "",
+            empresa_id=p.empresa_id,
+            empresa_nombre=empresas.get(p.empresa_id).nombre if empresas.get(p.empresa_id) else "",
+            subcarpeta=p.subcarpeta,
+            rol=p.rol,
+            fecha_asignacion=str(p.fecha_asignacion)
+        )
+        for p in permisos
+    ]
+
+@router.post("/", response_model=List[UserPermisoResponse])
+async def create_permiso(data: UserPermisoCreateUpdate, db: AsyncSession = Depends(get_db)):
+    created = []
+
+    # Borrar permisos existentes de este usuario/empresa
+    existing = await db.execute(
+        select(UserPermiso).where(
+            (UserPermiso.user_id == data.user_id) &
+            (UserPermiso.empresa_id == data.empresa_id)
+        )
+    )
+    for p in existing.scalars().all():
+        await db.delete(p)
+
+    # Crear permisos por subcarpeta
+    for s in data.subcarpetas:
+        permiso = UserPermiso(
+            user_id=data.user_id,
+            empresa_id=data.empresa_id,
+            subcarpeta=s.name,
+            rol=s.rol
+        )
+        db.add(permiso)
+        await db.flush()
+        created.append(
+            UserPermisoResponse(
+                id=permiso.id,
+                user_id=permiso.user_id,
+                username="",  # frontend puede refrescar usuarios si quiere
+                email="",
+                empresa_id=permiso.empresa_id,
+                empresa_nombre="",
+                subcarpeta=permiso.subcarpeta,
+                rol=permiso.rol,
+                fecha_asignacion=str(permiso.fecha_asignacion)
+            )
+        )
+    await db.commit()
+    return created
+
+@router.put("/{permiso_id}", response_model=UserPermisoResponse)
+async def update_permiso(permiso_id: int, data: UserPermisoUpdateRole, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserPermiso).where(UserPermiso.id == permiso_id))
+    permiso = result.scalar_one_or_none()
+    if not permiso:
+        raise HTTPException(404, "Permiso no encontrado")
+
+    permiso.rol = data.rol
+    db.add(permiso)
+    await db.commit()
+    await db.refresh(permiso)
+
+    # Obtener info de usuario/empresa
+    user_res = await db.execute(select(User).where(User.id == permiso.user_id))
+    user = user_res.scalar_one_or_none()
+    empresa_res = await db.execute(select(Empresa).where(Empresa.id == permiso.empresa_id))
+    empresa = empresa_res.scalar_one_or_none()
+
+    return UserPermisoResponse(
+        id=permiso.id,
+        user_id=permiso.user_id,
+        username=user.username if user else "",
+        email=user.email if user else "",
+        empresa_id=permiso.empresa_id,
+        empresa_nombre=empresa.nombre if empresa else "",
+        subcarpeta=permiso.subcarpeta,
+        rol=permiso.rol,
+        fecha_asignacion=str(permiso.fecha_asignacion)
+    )
+
+@router.delete("/{permiso_id}", response_model=dict)
+async def delete_permiso(permiso_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserPermiso).where(UserPermiso.id == permiso_id))
+    permiso = result.scalar_one_or_none()
+    if not permiso:
+        raise HTTPException(404, "Permiso no encontrado")
+    await db.delete(permiso)
+    await db.commit()
+    return {"msg": "Permiso eliminado"}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\utils\deps.py ====
+
+# app/utils/deps.py
+from fastapi import Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.database import async_session
+from app.models import User
+from app.auth import verify_password
+
+async def get_db() -> AsyncSession:
+    """Devuelve la sesión de base de datos asíncrona."""
+    async with async_session() as session:
+        yield session
+
+async def get_user_by_id(user_id: int, db: AsyncSession) -> User:
+    """Carga un usuario por su ID."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    return user
+
+async def get_current_active_user(user_id: int, db: AsyncSession = Depends(get_db)) -> User:
+    """Verifica que el usuario existe y está activo."""
+    user = await get_user_by_id(user_id, db)
+    if not user or not user.activo:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User inactive")
+    return user
+
+async def get_current_admin(user_id: int, db: AsyncSession = Depends(get_db)) -> User:
+    """Verifica que el usuario es admin."""
+    user = await get_current_active_user(user_id, db)
+    if user.rol != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    return user
+
+async def authenticate_user(username: str, password: str, db: AsyncSession) -> User:
+    """Verifica credenciales y devuelve el usuario."""
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalars().first()
+    if not user or not verify_password(password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    return user
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\auth.py ====
+
+#app/auth.py
+from jose import jwt
+from passlib.context import CryptContext
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SECRET_KEY = os.getenv('SECRET_KEY')
+ALGORITHM = os.getenv('ALGORITHM', 'HS256')
+pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict):
+    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+
+
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\database.py ====
+
+#app/database.py
+import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
+from urllib.parse import quote_plus
+
+load_dotenv()
+
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASS")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT", 3306)
+DB_NAME = os.getenv("DB_NAME")
+
+# Codificar la contraseña para que caracteres especiales no rompan la conexión
+DB_PASS_ENCODED = quote_plus(DB_PASS)
+
+DATABASE_URL = f"mysql+aiomysql://{DB_USER}:{DB_PASS_ENCODED}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+engine = create_async_engine(DATABASE_URL, echo=True, future=True)
+async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+Base = declarative_base()
+
+async def init_models():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\main.py ====
+
+# app/main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.routers import login, register, users, planos, empresas, user_permisos
+from app.database import init_models
+
+app = FastAPI(title="WebCliente API")
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cambiar a dominios específicos en producción
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Routers
+app.include_router(login.router)
+app.include_router(register.router)
+app.include_router(users.router)
+app.include_router(planos.router)
+app.include_router(empresas.router)
+app.include_router(user_permisos.router)
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\models.py ====
+
+# app/models.py
+from sqlalchemy import Column, Integer, String, Enum, Text, TIMESTAMP, CHAR, SmallInteger, text
+from app.database import Base
+import enum
+
+class RolEnum(enum.Enum):
+    admin = "admin"
+    cliente = "cliente"
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), nullable=False)
+    email = Column(String(100), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    rol = Column(Enum(RolEnum), nullable=False)
+    activo = Column(SmallInteger, default=0)
+    fecha_creacion = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    ultimo_login = Column(TIMESTAMP, nullable=True)
+
+class Empresa(Base):
+    __tablename__ = "empresas"
+    id = Column(Integer, primary_key=True)
+    numero = Column(CHAR(10), nullable=False)
+    nombre = Column(String(100), nullable=False)
+    carpeta_base = Column(String(255), nullable=False)
+    activo = Column(SmallInteger, default=1)
+    fecha_creacion = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+class Log(Base):
+    __tablename__ = "logs"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer)
+    empresa_id = Column(Integer)
+    accion = Column(String(255))
+    detalle = Column(Text)
+    ip = Column(String(50))
+    fecha = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+class UserPermiso(Base):
+    __tablename__ = "user_permisos"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    empresa_id = Column(Integer, nullable=False)
+    subcarpeta = Column(String(255), nullable=True)  # nombre de la subcarpeta
+    rol = Column(Enum("lector", "editor"), default="lector")  # rol por subcarpeta
+    fecha_asignacion = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\backend\app\schemas.py ====
+
+# app/schemas.py
+from pydantic import BaseModel, EmailStr
+from datetime import datetime
+
+# --------------------------
+# Usuarios / Clientes
+# --------------------------
+class UserCreate(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    rol: str
+    activo: bool
+    fecha_creacion: datetime
+
+    model_config = {"from_attributes": True}
+
+# --------------------------
+# Empresas
+# --------------------------
+class EmpresaBase(BaseModel):
+    numero: str
+    nombre: str
+    carpeta_base: str
+
+class EmpresaResponse(EmpresaBase):
+    id: int
+    activo: bool
+    fecha_creacion: datetime
+
+    model_config = {"from_attributes": True}

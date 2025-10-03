@@ -10,7 +10,7 @@ from pydantic import BaseModel
 import random, string
 
 from app.schemas import UserResponse
-from app.auth import get_password_hash
+from app.auth import get_password_hash, verify_password
 from app.models import User
 from app.utils.deps import get_db
 
@@ -31,6 +31,10 @@ class PasswordResetResponse(BaseModel):
 
 class RoleUpdateRequest(BaseModel):
     role: str
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
 
 # Obtener todos los usuarios
 @router.get("/all", response_model=List[UserResponse])
@@ -126,3 +130,20 @@ async def set_role(user_id: int, data: RoleUpdateRequest, db: AsyncSession = Dep
         rol=user.rol,
         activo=user.activo
     )
+
+# Modificar password
+@router.post("/{user_id}/change-password")
+async def change_password(user_id: int, data: ChangePasswordRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if not verify_password(data.old_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
+
+    user.password_hash = get_password_hash(data.new_password)
+    db.add(user)
+    await db.commit()
+
+    return {"msg": "Contraseña actualizada correctamente"}

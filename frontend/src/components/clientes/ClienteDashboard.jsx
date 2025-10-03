@@ -1,69 +1,67 @@
 // src/components/clientes/ClienteDashboard.jsx
 import React, { useState, useEffect } from "react";
-import { Outlet } from "react-router-dom";
-
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-import Sidebar from "./Sidebar";
-import api from "@/api/api";
+import Sidebar from "@/components/clientes/Sidebar";
+import SubcarpetaViewer from "@/components/clientes/SubcarpetaViewer";
+import { getPermisosCliente } from "@/api/api";
 
 export default function ClienteDashboard({ usuario, rol, onLogout }) {
-    const [activeSection, setActiveSection] = useState("");
     const [permisos, setPermisos] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [empresaSeleccionada, setEmpresaSeleccionada] = useState(null);
+    const [subcarpetaSeleccionada, setSubcarpetaSeleccionada] = useState(null);
+
+    const fetchPermisos = async (userId) => {
+        try {
+            setLoading(true);
+            const data = await getPermisosCliente(userId);
+            setPermisos(data);
+
+            if (data.length > 0) {
+                const primeraEmpresa = data[0];
+                setEmpresaSeleccionada(primeraEmpresa);
+                if (primeraEmpresa.subcarpetas.length > 0) {
+                    setSubcarpetaSeleccionada(primeraEmpresa.subcarpetas[0]);
+                }
+            }
+        } catch (err) {
+            console.error("Error cargando permisos:", err);
+            setError("No se pudieron cargar los permisos");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchPermisos = async () => {
-            try {
-                const res = await api.get("/user_permisos", {
-                    params: { user_id: usuario.id },
-                });
-                setPermisos(res.data || []);
-                if (res.data && res.data.length > 0) {
-                    setActiveSection(res.data[0].subcarpeta);
-                }
-            } catch (err) {
-                console.error("Error cargando permisos:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
+        if (usuario?.id) fetchPermisos(usuario.id);
+    }, [usuario]);
 
-        if (usuario.id) fetchPermisos();
-    }, [usuario.id]);
-
-    if (loading) {
-        return <div className="flex-1 flex justify-center items-center">Cargando permisos...</div>;
-    }
-
-    const permisoActivo = permisos.find(p => p.subcarpeta === activeSection);
+    if (!usuario) return <div>Cargando usuario...</div>;
+    if (loading) return <div>Cargando permisos...</div>;
+    if (error) return <div className="text-red-500">{error}</div>;
+    if (!permisos.length) return <div>No tienes permisos asignados</div>;
 
     return (
-        <div className="flex flex-col min-h-screen w-screen">
-            <Header
-                usuario={usuario.username}
-                rol={rol}
-                activeSection={activeSection}
-                onLogout={onLogout}
-            />
-
+        <div className="flex flex-col min-h-screen">           
             <div className="flex flex-1 overflow-hidden">
                 <aside className="flex-shrink-0 overflow-auto w-64 min-w-[16rem]">
                     <Sidebar
-                        permisos={permisos}
-                        activeSection={activeSection}
-                        setActiveSection={setActiveSection}
+                        empresas={permisos}
+                        empresaSeleccionada={empresaSeleccionada}
+                        setEmpresaSeleccionada={setEmpresaSeleccionada}
+                        subcarpetaSeleccionada={subcarpetaSeleccionada}
+                        setSubcarpetaSeleccionada={setSubcarpetaSeleccionada}
                     />
                 </aside>
 
-                <main className="flex-1 flex flex-col p-6 bg-pageGradient overflow-hidden">
-                    <div className="flex-1 overflow-auto">
-                        <Outlet context={{ activeSection, permisoActivo }} />
-                    </div>
-                </main>
+                <div className="flex-1 p-4 bg-pageGradient overflow-auto">
+                    <SubcarpetaViewer
+                        permisos={permisos}
+                        empresaSeleccionada={empresaSeleccionada}
+                        subcarpetaSeleccionada={subcarpetaSeleccionada}
+                    />
+                </div>
             </div>
-
-            <Footer />
         </div>
     );
 }

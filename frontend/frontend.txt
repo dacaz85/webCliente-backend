@@ -1,0 +1,1861 @@
+
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\api\api.js ====
+
+// src/api/api.js
+import axios from "axios";
+
+const api = axios.create({
+    baseURL: "http://127.0.0.1:8000/",
+    headers: {
+        "Content-Type": "application/json",
+    },
+});
+
+// Guardamos el token localmente
+let token = null;
+
+// Función para setear o limpiar el token
+export const setToken = (newToken) => {
+    token = newToken;
+    if (token) {
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    } else {
+        delete api.defaults.headers.common["Authorization"];
+    }
+};
+
+// Interceptor para pasar params correctamente y token en cada request
+api.interceptors.request.use((config) => {
+    if (token) {
+        config.headers["Authorization"] = `Bearer ${token}`;
+    }
+    return config;
+});
+
+export default api;
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\admin\AdminDashboard.jsx ====
+
+// src/components/admin/AdminDashboard.jsx
+import React, { useEffect, useState } from "react";
+import { Outlet } from "react-router-dom";
+import Sidebar from "@/components/admin/Sidebar";
+import api from "@/api/api";
+
+export default function AdminDashboard({ usuario, rol }) {
+    const [permisos, setPermisos] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchPermisos = async () => {
+            try {
+                const res = await api.get("/user_permisos", {
+                    params: { user_id: usuario?.id },
+                });
+                setPermisos(res.data || []);
+            } catch (err) {
+                console.error("Error cargando permisos:", err);
+                setPermisos([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (rol === "admin" && usuario?.id) fetchPermisos();
+    }, [usuario, rol]);
+
+    if (loading) {
+        return (
+            <div className="flex-1 flex justify-center items-center">
+                Cargando permisos...
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex flex-1 overflow-hidden">
+            <aside className="flex-shrink-0 overflow-auto w-64 min-w-[16rem]">
+                <Sidebar permisos={permisos} />
+            </aside>
+
+            <main className="flex-1 flex flex-col p-6 bg-pageGradient overflow-hidden">
+                <div className="flex-1 overflow-auto">
+                    <Outlet context={{ usuario }} />
+                </div>
+            </main>
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\admin\EmpresaTable.jsx ====
+
+// src/components/admin/EmpresaTable.jsx
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "@/api/api";
+
+export default function EmpresaTable({ filter, onAction }) {
+    const [empresas, setEmpresas] = useState([]);
+    const [search, setSearch] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [modal, setModal] = useState({ visible: false, title: "", onConfirm: null });
+    const [formData, setFormData] = useState({ numero: "", nombre: "", activo: true });
+    const [editId, setEditId] = useState(null);
+    const [subcarpetas, setSubcarpetas] = useState([]);
+    const navigate = useNavigate();
+
+    const fetchEmpresas = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get("/empresas/all");
+            setEmpresas(res.data || []);
+        } catch (err) {
+            console.error(err);
+            setEmpresas([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchEmpresas(); }, [filter]);
+
+    const handleAction = async (callback) => {
+        await callback();
+        fetchEmpresas();
+        if (onAction) onAction();
+    };
+
+    const showModal = (title, onConfirm, empresa = null) => {
+        if (empresa) {
+            setFormData({ numero: empresa.numero, nombre: empresa.nombre, activo: empresa.activo });
+            setEditId(empresa.id);
+        } else {
+            setFormData({ numero: "", nombre: "", activo: true });
+            setEditId(null);
+        }
+        setModal({ visible: true, title, onConfirm });
+    };
+
+    const closeModal = () => {
+        setModal({ visible: false, title: "", onConfirm: null });
+        setFormData({ numero: "", nombre: "", activo: true });
+        setEditId(null);
+    };
+
+    const handleSave = () => {
+        if (!formData.numero || !formData.nombre) {
+            alert("Número y nombre son obligatorios");
+            return;
+        }
+        if (!/^\d{4}$/.test(formData.numero)) {
+            alert("Número debe tener 4 dígitos numéricos");
+            return;
+        }
+        const dataToSend = { ...formData, carpeta_base: `${formData.numero} ${formData.nombre}` };
+        if (editId) handleAction(() => api.put(`/empresas/${editId}`, dataToSend));
+        else handleAction(() => api.post("/empresas", dataToSend));
+        closeModal();
+    };
+
+    const handleDelete = (empresa) => {
+        if (window.confirm(`¿Seguro que quieres eliminar la empresa "${empresa.nombre}"?`)) {
+            handleAction(() => api.delete(`/empresas/${empresa.id}`));
+        }
+    };
+
+    const handlePermisos = (empresa) => {
+        if (onAction) {
+            onAction({ section: "Permisos", userId: null, empresaId: empresa.id });
+        }
+    };
+
+    const filteredEmpresas = empresas.filter(e =>
+        e.numero.toLowerCase().includes(search.toLowerCase()) ||
+        e.nombre.toLowerCase().includes(search.toLowerCase())
+    );
+
+    if (loading) return <div>Cargando empresas...</div>;
+    if (!empresas || empresas.length === 0) return <div>No hay empresas que mostrar</div>;
+
+    return (
+        <>
+            <div className="mb-4 flex items-center gap-4">
+                <button
+                    className="bg-green-500 text-white px-4 py-2 rounded"
+                    onClick={() => showModal("Crear nueva empresa", handleSave)}
+                >
+                    Crear Empresa
+                </button>
+
+                <input
+                    type="text"
+                    placeholder="Buscar número o nombre..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="border px-2 py-1 rounded flex-1"
+                />
+            </div>
+
+            <table className="min-w-full border-separate border-spacing-0.5">
+                <thead className="bg-white/50">
+                    <tr>
+                        <th className="border px-4 py-2 text-left">ID</th>
+                        <th className="border px-4 py-2 text-left">Número</th>
+                        <th className="border px-4 py-2 text-left">Nombre</th>
+                        <th className="border px-4 py-2 text-left">Carpeta Base</th>
+                        <th className="border px-4 py-2 text-left">Activo</th>
+                        <th className="border px-4 py-2 text-left">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
+                    {filteredEmpresas.map((e) => (
+                        <tr key={e.id}>
+                            <td className="border px-4 py-2">{e.id}</td>
+                            <td className="border px-4 py-2">{e.numero}</td>
+                            <td className="border px-4 py-2">{e.nombre}</td>
+                            <td className="border px-4 py-2">{e.carpeta_base}</td>
+                            <td className="border px-4 py-2">{e.activo ? "Sí" : "No"}</td>
+                            <td className="border px-4 py-2 flex gap-2 flex-wrap">
+                                <button
+                                    onClick={() => showModal(`Editar empresa ${e.nombre}`, handleSave, e)}
+                                    className="bg-yellow-500 text-white px-2 py-1 rounded"
+                                >
+                                    Editar
+                                </button>
+                                <button
+                                    onClick={() => handleDelete(e)}
+                                    className="bg-red-500 text-white px-2 py-1 rounded"
+                                >
+                                    Eliminar
+                                </button>
+                                <button
+                                    onClick={() => handlePermisos(e)}
+                                    className="bg-purple-500 text-white px-2 py-1 rounded"
+                                >
+                                    Permisos
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>            
+
+            {/* Modal */}
+            {modal.visible && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
+                        <h3 className="text-lg font-bold mb-4">{modal.title}</h3>
+                        <div className="flex flex-col gap-2 mb-4">
+                            <input
+                                type="text"
+                                placeholder="Número (4 dígitos)"
+                                value={formData.numero}
+                                onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                                className="border px-2 py-1 rounded"
+                            />
+                            <input
+                                type="text"
+                                placeholder="Nombre"
+                                value={formData.nombre}
+                                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                                className="border px-2 py-1 rounded"
+                            />
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.activo}
+                                    onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
+                                />
+                                Activo
+                            </label>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+                                onClick={closeModal}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
+                                onClick={handleSave}
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\admin\PermisosTable.jsx ====
+
+// src/components/admin/PermisosTable.jsx
+import React, { useEffect, useState } from "react";
+import api from "@/api/api";
+
+export default function PermisosTable({ initialUserId = null, initialEmpresaId = null }) {
+    const [permisos, setPermisos] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [empresas, setEmpresas] = useState([]);
+    const [subcarpetas, setSubcarpetas] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(initialUserId || "");
+    const [selectedEmpresa, setSelectedEmpresa] = useState(initialEmpresaId || "");
+    const [search, setSearch] = useState("");
+    const [showForm, setShowForm] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    // --- Cargar permisos según filtros ---
+    const fetchPermisos = async () => {
+        setLoading(true);
+        try {
+            const params = new URLSearchParams();
+            if (selectedUser) params.append("user_id", selectedUser);
+            if (selectedEmpresa) params.append("empresa_id", selectedEmpresa);
+            if (search) params.append("search", search);
+
+            const res = await api.get(`/user_permisos?${params.toString()}`);
+            setPermisos(res.data);
+        } catch (err) {
+            console.error("Error al cargar permisos:", err);
+            setPermisos([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchUsers = async () => {
+        try {
+            const res = await api.get("/users/all");
+            setUsers(res.data || []);
+        } catch {
+            setUsers([]);
+        }
+    };
+
+    const fetchEmpresas = async () => {
+        try {
+            const res = await api.get("/empresas/all");
+            setEmpresas(res.data || []);
+        } catch {
+            setEmpresas([]);
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+        fetchEmpresas();
+    }, []);
+
+    useEffect(() => {
+        fetchPermisos();
+    }, [selectedUser, selectedEmpresa, search]);
+
+    // --- Limpiar filtros ---
+    const clearFilters = () => {
+        setSelectedUser("");
+        setSelectedEmpresa("");
+        setSearch("");
+    };
+
+    // --- Manejo de form ---
+    const handleCrearPermisos = () => setShowForm(!showForm);
+
+    const handleUserChange = (e) => setSelectedUser(e.target.value);
+    const handleEmpresaChange = (e) => setSelectedEmpresa(e.target.value);
+
+    // --- Guardar permisos ---
+    const handleSavePermisos = async () => {
+        if (!selectedUser || !selectedEmpresa) {
+            alert("Usuario y Empresa son obligatorios");
+            return;
+        }
+
+        try {
+            const data = {
+                user_id: parseInt(selectedUser),
+                empresa_id: parseInt(selectedEmpresa),
+                subcarpetas: subcarpetas.map(s => ({ name: s.name, rol: s.rol || "lector" }))
+            };
+            await api.post("/user_permisos", data);
+            setShowForm(false);
+            fetchPermisos();
+        } catch (err) {
+            console.error("Error al guardar permisos:", err);
+        }
+    };
+
+    // --- Manejo subcarpetas ---
+    const handleSubcarpetaCheck = (idx) => {
+        const newSub = [...subcarpetas];
+        newSub[idx].checked = !newSub[idx].checked;
+        setSubcarpetas(newSub);
+    };
+
+    const handleSubcarpetaRol = (idx, rol) => {
+        const newSub = [...subcarpetas];
+        newSub[idx].rol = rol;
+        setSubcarpetas(newSub);
+    };
+
+    // --- Cambiar rol individual ---
+    const handleRoleChange = async (permisoId, rol) => {
+        try {
+            await api.put(`/user_permisos/${permisoId}`, { rol });
+            fetchPermisos();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    // --- Eliminar permiso ---
+    const handleDelete = async (permisoId) => {
+        if (!window.confirm("¿Eliminar permiso?")) return;
+        try {
+            await api.delete(`/user_permisos/${permisoId}`);
+            fetchPermisos();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    return (
+        <div className="flex flex-col">
+            <div className="flex items-center gap-4 mb-4">
+                <button
+                    className={`px-4 py-2 rounded ${showForm ? "bg-red-500" : "bg-green-500"} text-white`}
+                    onClick={handleCrearPermisos}
+                >
+                    {showForm ? "Cancelar" : "Crear Permisos"}
+                </button>
+
+                <input
+                    type="text"
+                    placeholder="Buscar usuario, email o empresa..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="border px-2 py-1 rounded flex-1"
+                />
+
+                <button
+                    className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
+                    onClick={clearFilters}
+                >
+                    Quitar filtros
+                </button>
+            </div>
+
+            {showForm && (
+                <div className="border p-4 mb-4 bg-white/50 rounded shadow">
+                    <div className="flex flex-col gap-2 mb-2">
+                        <select
+                            value={selectedUser || ""}
+                            onChange={handleUserChange}
+                            className="border px-2 py-1 rounded"
+                        >
+                            <option value="">-- Seleccionar Usuario --</option>
+                            {users.map(u => <option key={u.id} value={u.id}>{u.username} ({u.email})</option>)}
+                        </select>
+
+                        <select
+                            value={selectedEmpresa || ""}
+                            onChange={handleEmpresaChange}
+                            className="border px-2 py-1 rounded"
+                        >
+                            <option value="">-- Seleccionar Empresa --</option>
+                            {empresas.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                        </select>
+                    </div>
+
+                    {subcarpetas.length > 0 && (
+                        <div className="mt-2">
+                            <h4 className="font-bold mb-2">Subcarpetas</h4>
+                            <table className="min-w-full border">
+                                <thead>
+                                    <tr>
+                                        <th className="border px-2 py-1">Seleccionar</th>
+                                        <th className="border px-2 py-1">Subcarpeta</th>
+                                        <th className="border px-2 py-1">Rol</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {subcarpetas.map((s, idx) => (
+                                        <tr key={idx}>
+                                            <td className="border px-2 py-1 text-center">
+                                                <input type="checkbox" checked={s.checked} onChange={() => handleSubcarpetaCheck(idx)} />
+                                            </td>
+                                            <td className="border px-2 py-1">{s.name}</td>
+                                            <td className="border px-2 py-1">
+                                                <select value={s.rol} onChange={(e) => handleSubcarpetaRol(idx, e.target.value)}>
+                                                    <option value="lector">Lector</option>
+                                                    <option value="editor">Editor</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    <button className="mt-2 px-4 py-2 bg-blue-500 text-white rounded" onClick={handleSavePermisos}>Guardar Permisos</button>
+                </div>
+            )}
+
+            {loading && <div>Cargando permisos...</div>}
+            {!loading && permisos.length === 0 && <div>No hay permisos que mostrar</div>}
+
+            {!loading && permisos.length > 0 && (
+                <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
+                    <table className="min-w-full border-separate border-spacing-0.5">
+                        <thead className="bg-white/50">
+                            <tr>
+                                <th className="border px-4 py-2 text-left">Usuario</th>
+                                <th className="border px-4 py-2 text-left">Email</th>
+                                <th className="border px-4 py-2 text-left">Empresa</th>
+                                <th className="border px-4 py-2 text-left">Subcarpeta</th>
+                                <th className="border px-4 py-2 text-left">Rol</th>
+                                <th className="border px-4 py-2 text-left">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
+                            {permisos.map((p) => (
+                                <tr key={p.id}>
+                                    <td className="border px-4 py-2">{p.username || "—"}</td>
+                                    <td className="border px-4 py-2">{p.email || "—"}</td>
+                                    <td className="border px-4 py-2">{p.empresa_nombre || "—"}</td>
+                                    <td className="border px-4 py-2">{p.subcarpeta || "—"}</td>
+                                    <td className="border px-4 py-2">
+                                        <select
+                                            value={p.rol || "lector"}
+                                            onChange={(e) => handleRoleChange(p.id, e.target.value)}
+                                            className="border px-2 py-1 rounded"
+                                        >
+                                            <option value="lector">Lector</option>
+                                            <option value="editor">Editor</option>                                            
+                                        </select>
+                                    </td>
+                                    <td className="border px-4 py-2">
+                                        <button
+                                            className="bg-red-500 text-white px-2 py-1 rounded"
+                                            onClick={() => handleDelete(p.id)}
+                                        >
+                                            Eliminar
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}            
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\admin\Sidebar.jsx ====
+
+// src/components/admin/Sidebar.jsx
+import { useNavigate, useLocation } from "react-router-dom";
+import { adminPages } from "@/pages/admin/adminPages";
+
+export default function Sidebar({ permisos }) {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const handleClick = (path) => navigate(`/admin/${path}`);
+
+    return (
+        <aside className="w-64 bg-pageGradientInverse p-6 flex flex-col h-full gap-4">
+            <h2 className="font-bold mb-4">Panel Administrador</h2>
+            {adminPages.map((p) => {
+                const isActive = location.pathname.startsWith(`/admin/${p.path}`);
+                const Icon = p.icon;
+                return (
+                    <button
+                        key={p.path}
+                        onClick={() => handleClick(p.path)}
+                        className={`flex items-center gap-2 px-2 py-1 rounded ${isActive ? "bg-blue-100 font-semibold" : "hover:bg-blue-200"
+                            }`}
+                    >
+                        {Icon && <Icon size={20} />}
+                        {p.name}
+                    </button>
+                );
+            })}
+        </aside>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\admin\SummaryCards.jsx ====
+
+// src/components/admin/SummaryCards.jsx
+import React, { useEffect, useState } from "react";
+import api from "@/api/api";
+
+export default function SummaryCards({ onFilter, refreshKey }) {
+    const [stats, setStats] = useState({
+        pendientes: 0,
+        activos: 0,
+        total: 0,
+    });
+
+    const fetchStats = async () => {
+        try {
+            const res = await api.get("/users/all");
+            const data = res.data || [];
+
+            setStats({
+                pendientes: data.filter(u => !u.activo).length,
+                activos: data.filter(u => u.activo).length,
+                bloqueados: 0,
+                total: data.length,
+            });
+        } catch (err) {
+            console.error("Error fetching user stats:", err);
+            setStats({ pendientes: 0, activos: 0, bloqueados: 0, total: 0 });
+        }
+    };
+
+    useEffect(() => {
+        fetchStats();
+    }, [refreshKey]);
+
+    return (
+        <div className="grid grid-cols-3 gap-4 mb-4">
+            <div
+                className="bg-white/50 p-4 rounded-2xl shadow text-center cursor-pointer hover:shadow-lg"
+                onClick={() => onFilter("todos")}
+            >
+                <h3 className="text-sm text-gray-500">Todos</h3>
+                <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+            </div>
+            <div
+                className="bg-white/50 p-4 rounded-2xl shadow text-center cursor-pointer hover:shadow-lg"
+                onClick={() => onFilter("pendiente")}
+            >
+                <h3 className="text-sm text-gray-500">Usuarios Pendientes</h3>
+                <p className="text-2xl font-bold text-red-500">{stats.pendientes}</p>
+            </div>
+            <div
+                className="bg-white/50 p-4 rounded-2xl shadow text-center cursor-pointer hover:shadow-lg"
+                onClick={() => onFilter("activo")}
+            >
+                <h3 className="text-sm text-gray-500">Usuarios Activos</h3>
+                <p className="text-2xl font-bold text-green-600">{stats.activos}</p>
+            </div>
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\admin\UserTable.jsx ====
+
+// src/components/admin/UserTable.jsx
+import React, { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "@/api/api";
+
+export default function UserTable({ filter, onAction }) {
+    const [users, setUsers] = useState([]);
+    const [search, setSearch] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [modal, setModal] = useState({ visible: false, title: "", message: "", onConfirm: null });
+    const containerRef = useRef(null);
+    const navigate = useNavigate();
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get("/users/all");
+            let data = res.data || [];
+
+            if (filter && filter !== "todos") {
+                if (filter === "pendiente") data = data.filter(u => !u.activo);
+                else if (filter === "activo") data = data.filter(u => u.activo);
+            }
+
+            setUsers(data);
+        } catch (err) {
+            console.error(err);
+            setUsers([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchUsers(); }, [filter]);
+
+    const handleAction = async (callback) => {
+        await callback();
+        fetchUsers();
+        if (onAction) onAction();
+    };
+
+    const showConfirmModal = (title, message, onConfirm) => {
+        setModal({ visible: true, title, message, onConfirm });
+    };
+
+    const closeModal = () => setModal({ visible: false, title: "", message: "", onConfirm: null });
+
+    const validateUser = (id) =>
+        handleAction(() => api.post(`/users/${id}/validate`).catch(console.error));
+
+    const deleteUser = (user) => {
+        showConfirmModal(
+            `Eliminar usuario ${user.username}?`,
+            "Esta acción es irreversible",
+            () => handleAction(() => api.delete(`/users/${user.id}`).catch(console.error))
+        );
+    };
+
+    const elevateUser = (user) => {
+        const newRole = user.rol === "admin" ? "cliente" : "admin";
+
+        showConfirmModal(
+            `${newRole === "admin" ? "Elevar a Admin" : "Pasar a Cliente"} - ${user.username}`,
+            `¿Deseas realmente cambiar el rol de ${user.username} a ${newRole}?`,
+            () => handleAction(() =>
+                api.post(`/users/${user.id}/set-role`, { role: newRole })
+                    .then(response => { user.rol = response.data.rol; })
+                    .catch(console.error)
+            )
+        );
+    };
+
+    const resetPassword = (user) => {
+        showConfirmModal(
+            `Resetear contraseña - ${user.username}`,
+            "Se generará una contraseña temporal que se mostrará al finalizar",
+            async () => {
+                await handleAction(async () => {
+                    const res = await api.post(`/users/${user.id}/reset-password`);
+                    alert(`Contraseña temporal: ${res.data.temp_password}`);
+                });
+            }
+        );
+    };
+
+    const goToPermisos = (user) => {
+        if (onAction) {
+            onAction({ section: "Permisos", userId: user.id, empresaId: null });
+        }
+    };
+
+    // --- Filtrado ---
+    const filteredUsers = users.filter(u =>
+        u.username.toLowerCase().includes(search.toLowerCase()) ||
+        u.email.toLowerCase().includes(search.toLowerCase())
+    );
+
+    if (loading) return <div>Cargando usuarios...</div>;
+    if (!users || users.length === 0) return <div>No hay usuarios que mostrar</div>;
+
+    return (
+        <div className="flex flex-col">
+            {/* Input búsqueda */}
+            <div className="flex items-center gap-4 mb-4">
+                <input
+                    type="text"
+                    placeholder="Buscar usuario o email..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="border px-2 py-1 rounded flex-1"
+                />
+            </div>
+
+            <div
+                ref={containerRef}
+                className="flex-1 overflow-auto"
+                style={{ maxHeight: 'calc(100vh - 16rem)' }}
+            >
+                <table className="min-w-full border-separate border-spacing-2">
+                    <thead className="bg-white/50">
+                        <tr>
+                            <th className="px-4 py-2 text-left">ID</th>
+                            <th className="px-4 py-2 text-left">Usuario</th>
+                            <th className="px-4 py-2 text-left">Email</th>
+                            <th className="px-4 py-2 text-left">Activo</th>
+                            <th className="px-4 py-2 text-left">Rol</th>
+                            <th className="px-4 py-2 text-left">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
+                        {filteredUsers.map(u => (
+                            <tr key={u.id}>
+                                <td className="px-4 py-2 border">{u.id}</td>
+                                <td className="px-4 py-2 border">{u.username}</td>
+                                <td className="px-4 py-2 border">{u.email}</td>
+                                <td className="px-4 py-2 border">{u.activo ? "Sí" : "No"}</td>
+                                <td className="px-4 py-2 border">{u.rol}</td>
+                                <td className="px-4 py-2 border flex gap-2 flex-wrap">
+                                    {!u.activo && (
+                                        <button
+                                            onClick={() => validateUser(u.id)}
+                                            className="bg-green-500 text-white px-2 py-1 rounded"
+                                        >
+                                            Validar
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => elevateUser(u)}
+                                        className="bg-yellow-500 text-white px-2 py-1 rounded"
+                                    >
+                                        {u.rol === "admin" ? "Pasar a Cliente" : "Elevar a Admin"}
+                                    </button>
+                                    <button
+                                        onClick={() => resetPassword(u)}
+                                        className="bg-blue-500 text-white px-2 py-1 rounded"
+                                    >
+                                        Resetear contraseña
+                                    </button>
+                                    <button
+                                        onClick={() => deleteUser(u)}
+                                        className="bg-red-500 text-white px-2 py-1 rounded"
+                                    >
+                                        Eliminar
+                                    </button>
+                                    {u.rol === "cliente" && (
+                                        <button
+                                            onClick={() => goToPermisos(u)}
+                                            className="bg-purple-500 text-white px-2 py-1 rounded"
+                                        >
+                                            Permisos
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {/* Modal */}
+                {modal.visible && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
+                            <h3 className="text-lg font-bold mb-4">{modal.title}</h3>
+                            <p className="mb-6">{modal.message}</p>
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+                                    onClick={closeModal}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
+                                    onClick={() => {
+                                        modal.onConfirm();
+                                        closeModal();
+                                    }}
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\clientes\ClienteDashboard.jsx ====
+
+// src/components/clientes/ClienteDashboard.jsx
+import React, { useState, useEffect } from "react";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import api from "@/api/api";
+
+/**
+ * ClienteDashboard
+ * - Carga permisos del usuario: GET /user_permisos?user_id=...
+ * - Carga empresas: GET /empresas/all (para obtener carpeta_base)
+ * - Combina los datos para pasar al Sidebar y a los componentes hijos vía Outlet context
+ *
+ * Nota: NO renderiza Header/Footer (estos están en App.jsx)
+ */
+
+export default function ClienteDashboard({ usuario, rol, onLogout }) {
+    const [permisos, setPermisos] = useState([]); // { user_id, empresa_id, empresa_nombre, carpeta_base, subcarpeta, rol }
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        const fetch = async () => {
+            setLoading(true);
+            setError("");
+            try {
+                if (!usuario?.id) {
+                    setPermisos([]);
+                    setLoading(false);
+                    return;
+                }
+
+                // 1) Obtener permisos del usuario
+                const resPerm = await api.get("/user_permisos", {
+                    params: { user_id: usuario.id },
+                });
+                const permisosRaw = resPerm.data || [];
+
+                // 2) Obtener todas las empresas (map id -> carpeta_base)
+                const resEmp = await api.get("/empresas/all");
+                const empresas = resEmp.data || [];
+                const empresaMap = {};
+                empresas.forEach((e) => {
+                    empresaMap[e.id] = e; // contiene carpeta_base
+                });
+
+                // 3) Combinar para obtener carpeta_base en cada permiso
+                const permisosPrepared = permisosRaw.map((p) => {
+                    const empresa = empresaMap[p.empresa_id];
+                    return {
+                        id: p.id,
+                        user_id: p.user_id,
+                        username: p.username,
+                        email: p.email,
+                        empresa_id: p.empresa_id,
+                        empresa_nombre: p.empresa_nombre || (empresa ? empresa.nombre : ""),
+                        carpeta_base: empresa ? empresa.carpeta_base : null,
+                        subcarpeta: p.subcarpeta,
+                        rol: p.rol,
+                        fecha_asignacion: p.fecha_asignacion,
+                    };
+                });
+
+                setPermisos(permisosPrepared);
+            } catch (err) {
+                console.error("Error cargando permisos/empresas:", err);
+                setError("Error cargando permisos");
+                setPermisos([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (rol === "cliente" && usuario?.id) fetch();
+        else {
+            // si no es cliente, limpiar
+            setPermisos([]);
+            setLoading(false);
+        }
+    }, [usuario, rol]);
+
+    // Derivar sección activa de la URL para marcar en el Sidebar
+    const activeSection = location.pathname.split("/").filter(Boolean)[1] || "planos";
+
+    if (loading) {
+        return (
+            <div className="flex-1 flex justify-center items-center">
+                Cargando permisos...
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex-1 flex justify-center items-center text-red-600">
+                {error}
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex flex-1 overflow-hidden">
+            <aside className="flex-shrink-0 overflow-auto w-64 min-w-[16rem]">
+                {/* Sidebar espera prop permisos y activeSection */}
+                <Outlet /> {/* placeholder so layout grid matches admin; actual Sidebar is rendered in App layout area */}
+            </aside>
+
+            <main className="flex-1 flex flex-col p-6 bg-pageGradient overflow-hidden">
+                <div className="flex-1 overflow-auto">
+                    {/* Pasamos usuario y permisos al Outlet children */}
+                    <Outlet context={{ usuario, permisos }} />
+                </div>
+            </main>
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\clientes\Sidebar.jsx ====
+
+// src/components/clientes/Sidebar.jsx
+import React from "react";
+
+export default function Sidebar({ empresas, empresaSeleccionada, setEmpresaSeleccionada }) {
+    return (
+        <div className="w-64 bg-gray-100 border-r p-4">
+            <h2 className="text-lg font-bold mb-4">Empresas</h2>
+            <ul>
+                {empresas.map(e => (
+                    <li
+                        key={e.id}
+                        className={`cursor-pointer p-2 rounded mb-1 ${empresaSeleccionada?.id === e.id ? "bg-blue-500 text-white" : "hover:bg-blue-100"
+                            }`}
+                        onClick={() => setEmpresaSeleccionada(e)}
+                    >
+                        {e.nombre}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\clientes\SubcarpetaViewer.jsx ====
+
+// src/components/clientes/SubcarpetaViewer.jsx
+import { useState, useEffect } from "react";
+import api from "@/api/api";
+
+export default function SubcarpetaViewer({ empresaId, subcarpeta }) {
+    const [files, setFiles] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const fetchFiles = async () => {
+            try {
+                const response = await api.get("/planos/", {
+                    params: { empresa_id: empresaId, subcarpeta },
+                });
+                setFiles(response.data);
+            } catch (err) {
+                console.error(err);
+                setError("No se pudieron cargar los archivos.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchFiles();
+    }, [empresaId, subcarpeta]);
+
+    if (loading) return <div>Cargando archivos...</div>;
+    if (error) return <div>{error}</div>;
+    if (!files.length) return <div>No hay archivos en esta subcarpeta.</div>;
+
+    return (
+        <ul>
+            {files.map((f, idx) => (
+                <li key={idx}>
+                    <a href={f.url} target="_blank" rel="noopener noreferrer">{f.name}</a>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\layout\Footer.jsx ====
+
+// src/components/layout/Footer.jsx
+export default function Footer() {
+    return (
+        <footer className="w-full bg-[#011155e7] text-white text-center p-4">
+            © {new Date().getFullYear()} Dacaz Manufacturing & Design, SLU. Todos los derechos reservados.
+        </footer>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\layout\Header.jsx ====
+
+// src/components/layout/Header.jsx
+import React, { useState } from "react";
+import { useLocation } from "react-router-dom";
+import { adminPages } from "@/pages/admin/adminPages";
+import api from "@/api/api";
+
+export default function Header({ usuario, rol, onLogout }) {
+    const location = useLocation();
+    const isLogged = !!usuario && !!onLogout;
+
+    const [modal, setModal] = useState({ visible: false, oldPassword: "", newPassword: "", confirmPassword: "", error: "", success: "" });
+
+    // Determinar título dinámico según URL y rol
+    let centralTitle = "Portal Clientes";
+    if (rol === "admin") {
+        const activePage = adminPages.find((p) => location.pathname.startsWith(`/admin/${p.path}`));
+        centralTitle = activePage?.name || "Panel Administrador";
+    }
+
+    const openModal = () => setModal({ ...modal, visible: true, oldPassword: "", newPassword: "", confirmPassword: "", error: "", success: "" });
+    const closeModal = () => setModal({ ...modal, visible: false });
+
+    const handleChangePassword = async () => {
+        setModal({ ...modal, error: "", success: "" });
+        if (!modal.oldPassword || !modal.newPassword || !modal.confirmPassword) {
+            setModal((prev) => ({ ...prev, error: "Todos los campos son obligatorios" }));
+            return;
+        }
+        if (modal.newPassword !== modal.confirmPassword) {
+            setModal((prev) => ({ ...prev, error: "Las contraseñas nuevas no coinciden" }));
+            return;
+        }
+
+        try {
+            await api.post(`/users/${usuario.id}/change-password`, {
+                old_password: modal.oldPassword,
+                new_password: modal.newPassword
+            });
+            setModal({ ...modal, success: "Contraseña actualizada correctamente", error: "" });
+        } catch (err) {
+            const detail = err.response?.data?.detail || "Error al actualizar la contraseña";
+            setModal({ ...modal, error: detail, success: "" });
+        }
+    };
+
+    return (
+        <header className="h-16 flex items-center justify-between p-4 shadow-md font-sans bg-[#dc8502] z-10">
+            {/* Logo */}
+            <div className="text-4xl font-audiowide text-[#022CDC]">dacazMD</div>
+
+            {/* Título */}
+            <div className="text-2xl font-bold text-black text-center flex-1">{centralTitle}</div>
+
+            {/* Usuario */}
+            {isLogged && (
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+                            {usuario?.username?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                        <div className="text-md">
+                            <div className="font-medium">{usuario?.username || "Usuario"}</div>
+                            <div className="text-s text-slate-500">{rol}</div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={openModal}
+                        className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition"
+                    >
+                        Cambiar contraseña
+                    </button>
+
+                    <button
+                        onClick={onLogout}
+                        className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
+                    >
+                        Desconectar
+                    </button>
+                </div>
+            )}
+
+            {/* Modal cambio contraseña */}
+            {modal.visible && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
+                        <h3 className="text-lg font-bold mb-4">Cambiar contraseña</h3>
+
+                        {modal.error && <p className="text-red-500 mb-2">{modal.error}</p>}
+                        {modal.success && <p className="text-green-500 mb-2">{modal.success}</p>}
+
+                        <input
+                            type="password"
+                            placeholder="Contraseña actual"
+                            className="border p-2 rounded w-full mb-2"
+                            value={modal.oldPassword}
+                            onChange={(e) => setModal({ ...modal, oldPassword: e.target.value })}
+                        />
+                        <input
+                            type="password"
+                            placeholder="Nueva contraseña"
+                            className="border p-2 rounded w-full mb-2"
+                            value={modal.newPassword}
+                            onChange={(e) => setModal({ ...modal, newPassword: e.target.value })}
+                        />
+                        <input
+                            type="password"
+                            placeholder="Confirmar nueva contraseña"
+                            className="border p-2 rounded w-full mb-4"
+                            value={modal.confirmPassword}
+                            onChange={(e) => setModal({ ...modal, confirmPassword: e.target.value })}
+                        />
+
+                        <div className="flex justify-end gap-2">
+                            <button
+                                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+                                onClick={closeModal}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
+                                onClick={handleChangePassword}
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </header>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\components\layout\Modal.jsx ====
+
+// src/components/layout/Modal.jsx
+import React from "react";
+
+export default function Modal({ title, message, onClose }) {
+    return (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+            <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+                <h3 className="text-xl font-semibold mb-4">{title}</h3>
+                <pre className="bg-gray-100 p-2 rounded mb-4 whitespace-pre-wrap">{message}</pre>
+                <button
+                    onClick={onClose}
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+                >
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\admin\adminPages.js ====
+
+// src/pages/admin/adminPages.js
+import { Users, Building, Key } from "lucide-react";
+import Usuarios from "@/pages/admin/Usuarios";
+import Empresas from "@/pages/admin/Empresas";
+import Permisos from "@/pages/admin/Permisos";
+
+export const adminPages = [
+    { name: "Usuarios", path: "usuarios", component: Usuarios, icon: Users },
+    { name: "Empresas", path: "empresas", component: Empresas, icon: Building },
+    { name: "Permisos", path: "permisos", component: Permisos, icon: Key },
+];
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\admin\Empresas.jsx ====
+
+// src/pages/admin/Empresas.jsx
+import React from "react";
+import EmpresaTable from "@/components/admin/EmpresaTable";
+
+export default function Empresas() {
+    return (
+        <div className="flex-1 p-6">
+            <EmpresaTable />
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\admin\Permisos.jsx ====
+
+// src/pages/admin/Permisos.jsx
+import React, { useState } from "react";
+import PermisosTable from "@/components/admin/PermisosTable";
+
+export default function Permisos() {
+    const [selectedUserId, setSelectedUserId] = useState(null);
+    const [selectedEmpresaId, setSelectedEmpresaId] = useState(null);
+
+    return (
+        <div className="flex-1 p-6">
+            <PermisosTable
+                initialUserId={selectedUserId}
+                initialEmpresaId={selectedEmpresaId}
+            />
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\admin\Usuarios.jsx ====
+
+// src/pages/admin/Usuarios.jsx
+import React, { useState } from "react";
+import SummaryCards from "@/components/admin/SummaryCards";
+import UserTable from "@/components/admin/UserTable";
+
+// Páginas adaptadas a URL; no se necesita useParams aquí porque AdminDashboard maneja el Outlet
+export default function Usuarios() {
+    const [filter, setFilter] = useState("todos");
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleAction = () => setRefreshKey(prev => prev + 1);
+
+    return (
+        <div className="flex flex-col flex-1 p-6 space-y-6">
+            <SummaryCards refreshKey={refreshKey} onFilter={setFilter} />
+            <UserTable filter={filter} onAction={handleAction} />
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\clientes\Certificados.jsx ====
+
+// src/pages/clientes/Pedidos.jsx
+import React, { useState, useEffect } from "react";
+import api from "@/api/api";
+
+// No requiere cambios funcionales, solo derivado de URL
+export default function Pedidos() {
+    const [pedidos, setPedidos] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const fetchPedidos = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await api.get("/pedidos", {
+                    params: { user_id: localStorage.getItem("user_id") },
+                });
+                setPedidos(res.data || []);
+            } catch (err) {
+                console.error("Error cargando pedidos:", err);
+                setError("No se pudieron cargar los pedidos");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchPedidos();
+    }, []);
+
+    if (loading) return <div>Cargando pedidos...</div>;
+    if (error) return <div>{error}</div>;
+    if (pedidos.length === 0) return <div>No hay pedidos disponibles</div>;
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pedidos.map((p) => (
+                <div key={p.id} className="border p-2 rounded hover:shadow-md">
+                    Pedido #{p.id} - {p.estado || "Pendiente"}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\clientes\clientesPages.js ====
+
+// src/pages/clientes/clientesPages.js
+import { DraftingCompass, ShoppingCart, Ticket } from "lucide-react";
+import Planos from "@/pages/clientes/Planos";
+import Pedidos from "@/pages/clientes/Pedidos";
+import Certificados from "@/pages/clientes/Certificados";
+
+export const clientesPages = [
+    { name: "Planos", path: "planos", component: Planos, icon: DraftingCompass },
+    { name: "Pedidos", path: "pedidos", component: Pedidos, icon: ShoppingCart },
+    { name: "Certificados", path: "certificados", component: Certificados, icon: Ticket },
+];
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\clientes\Pedidos.jsx ====
+
+// src/pages/clientes/Pedidos.jsx
+import React, { useState, useEffect } from "react";
+import api from "@/api/api";
+
+// No requiere cambios funcionales, solo derivado de URL
+export default function Pedidos() {
+    const [pedidos, setPedidos] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const fetchPedidos = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await api.get("/pedidos", {
+                    params: { user_id: localStorage.getItem("user_id") },
+                });
+                setPedidos(res.data || []);
+            } catch (err) {
+                console.error("Error cargando pedidos:", err);
+                setError("No se pudieron cargar los pedidos");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchPedidos();
+    }, []);
+
+    if (loading) return <div>Cargando pedidos...</div>;
+    if (error) return <div>{error}</div>;
+    if (pedidos.length === 0) return <div>No hay pedidos disponibles</div>;
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pedidos.map((p) => (
+                <div key={p.id} className="border p-2 rounded hover:shadow-md">
+                    Pedido #{p.id} - {p.estado || "Pendiente"}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\clientes\Planos.jsx ====
+
+// src/pages/Planos.jsx
+import React, { useEffect, useState } from "react";
+import SubcarpetaViewer from "@/components/clientes//SubcarpetaViewer";
+import api from "@/api/api";
+
+export default function Planos({ userId }) {
+    const [empresas, setEmpresas] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchEmpresas = async () => {
+            try {
+                const response = await api.get("/empresas/all");
+                setEmpresas(response.data);
+            } catch (error) {
+                console.error("Error cargando empresas:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchEmpresas();
+    }, []);
+
+    if (loading) return <div>Cargando empresas...</div>;
+    if (!empresas.length) return <div>No hay empresas disponibles.</div>;
+
+    return (
+        <div>
+            <h2>Planos</h2>
+            {userPermisos.map(p => (
+                <div key={p.id} style={{ marginBottom: "20px", border: "1px solid #ccc", padding: "10px" }}>
+                    <h3>{p.empresa_nombre} - {p.subcarpeta}</h3>
+                    <SubcarpetaViewer empresaId={p.empresa_id} subcarpeta={p.subcarpeta} />
+                </div>
+            ))}
+
+        </div>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\public\Login.jsx ====
+
+// src/pages/public/Login.jsx
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "@/api/api";
+
+export default function Login({ onLogin }) {
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState("");
+    const [modal, setModal] = useState({ visible: false, title: "", message: "" });
+    const navigate = useNavigate();
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError("");
+
+        try {
+            const res = await api.post("/login/", { username, password });
+            const { access_token, rol, id } = res.data;
+
+            const userData = { id, username, rol, token: access_token };
+            localStorage.setItem("usuario", JSON.stringify(userData));
+            localStorage.setItem("user_id", id);
+            localStorage.setItem("token", access_token);
+            localStorage.setItem("rol", rol);
+
+            if (onLogin) onLogin(userData);
+
+            if (rol === "admin") navigate("/admin/usuarios");
+            else if (rol === "cliente") navigate("/cliente/planos");
+            else navigate("/");
+        } catch (err) {
+            console.error(err);
+            const detail = err.response?.data?.detail;
+            if (detail) {
+                setError(
+                    Array.isArray(detail) ? detail.map((d) => d.msg).join(", ") : detail
+                );
+            } else {
+                setError("Error de conexión");
+            }
+        }
+    };
+
+    const handleSolicitarAcceso = () => navigate("/register");
+
+    const handleResetPassword = () => {
+        setModal({
+            visible: true,
+            title: "Resetear contraseña",
+            message:
+                "Ingresa tu usuario y recibirás un email con la contraseña temporal.",
+        });
+    };
+
+    const closeModal = () => setModal({ visible: false, title: "", message: "" });
+
+    return (
+        <main className="flex-1 h-full flex flex-col justify-center items-center bg-pageGradient">
+            <div className="w-full max-w-md p-6 bg-white/40 rounded shadow-md">
+                <h2 className="text-2xl text-center font-bold mb-4">Iniciar sesión</h2>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <input
+                        type="text"
+                        placeholder="Usuario"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="border p-2 rounded"
+                        required
+                    />
+                    <input
+                        type="password"
+                        placeholder="Contraseña"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="border p-2 rounded"
+                        required
+                    />
+                    {error && <div className="text-red-500">{error}</div>}
+                    <button
+                        type="submit"
+                        className="bg-[#022CDC] text-white py-2 px-4 rounded hover:bg-[#021f9c] text-lg"
+                    >
+                        Entrar
+                    </button>
+                </form>
+                <button
+                    onClick={handleSolicitarAcceso}
+                    className="mt-4 w-full text-center text-black bg-[#022CDC]/25 py-2 rounded cursor-pointer text-lg"
+                >
+                    Solicitar acceso
+                </button>
+                <button
+                    onClick={handleResetPassword}
+                    className="mt-2 w-full text-center text-white bg-blue-500 hover:bg-blue-600 py-2 rounded text-lg"
+                >
+                    Resetear contraseña
+                </button>
+            </div>
+
+            {modal.visible && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
+                        <h3 className="text-lg font-bold mb-4">{modal.title}</h3>
+                        <p className="mb-6">{modal.message}</p>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
+                                onClick={closeModal}
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </main>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\pages\public\Register.jsx ====
+
+// src/pages/public/Register.jsx
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "@/api/api";
+
+export default function Register() {
+    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [error, setError] = useState("");
+    const [msg, setMsg] = useState("");
+    const navigate = useNavigate();
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError("");
+        setMsg("");
+
+        if (password !== confirmPassword) {
+            setError("Las contraseñas no coinciden");
+            return;
+        }
+        if (password.length < 6) {
+            setError("La contraseña debe tener al menos 6 caracteres");
+            return;
+        }
+
+        try {
+            const res = await api.post("/register/", {
+                username,
+                email,
+                password,
+            });
+            setMsg(res.data.msg || "Registro exitoso, espera validación del admin");
+            setUsername("");
+            setEmail("");
+            setPassword("");
+            setConfirmPassword("");
+        } catch (err) {
+            console.error(err);
+            const detail = err.response?.data?.detail;
+            if (detail) {
+                setError(
+                    Array.isArray(detail) ? detail.map((d) => d.msg).join(", ") : detail
+                );
+            } else {
+                setError("Error de conexión");
+            }
+        }
+    };
+
+    return (
+        <main className="flex-1 h-full flex flex-col justify-center items-center bg-pageGradient">
+            <div className="w-full max-w-md p-6 bg-white/40 rounded shadow-md">
+                <h2 className="text-2xl text-center font-bold mb-4">Solicitar acceso</h2>
+
+                {error && <div className="text-red-500 mb-2">{error}</div>}
+                {msg && <div className="text-green-500 mb-2">{msg}</div>}
+
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <input
+                        type="text"
+                        placeholder="Usuario"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="border p-2 rounded"
+                        required
+                    />
+                    <input
+                        type="email"
+                        placeholder="Email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="border p-2 rounded"
+                        required
+                    />
+                    <input
+                        type="password"
+                        placeholder="Contraseña"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="border p-2 rounded"
+                        required
+                    />
+                    <input
+                        type="password"
+                        placeholder="Confirmar Contraseña"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="border p-2 rounded"
+                        required
+                    />
+                    <button
+                        type="submit"
+                        className="bg-[#022CDC] text-white py-2 px-4 rounded hover:bg-[#021f9c] text-lg"
+                    >
+                        Solicitar acceso
+                    </button>
+                </form>
+
+                <button
+                    onClick={() => navigate("/")}
+                    className="mt-4 w-full text-center text-black bg-[#022CDC]/25 py-2 rounded cursor-pointer text-lg"
+                >
+                    Volver al login
+                </button>
+            </div>
+        </main>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\App.jsx ====
+
+// src/App.jsx
+import React, { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
+
+// Public pages
+import Login from "@/pages/public/Login";
+import Register from "@/pages/public/Register";
+
+// Dashboards
+import AdminDashboard from "@/components/admin/AdminDashboard";
+import ClienteDashboard from "@/components/clientes/ClienteDashboard";
+
+// Cliente pages
+import SubcarpetaViewer from "@/components/clientes/SubcarpetaViewer";
+import { clientesPages } from "@/pages/clientes/clientesPages";
+
+// Admin pages
+import { adminPages } from "@/pages/admin/adminPages";
+
+export default function App() {
+    const [usuario, setUsuario] = useState(null);
+    const [logoutTimer, setLogoutTimer] = useState(null);
+    const [modal, setModal] = useState({ visible: false, title: "", message: "" });
+
+    const handleLogout = () => {
+        localStorage.removeItem("usuario");
+        localStorage.removeItem("token");
+        localStorage.removeItem("rol");
+        localStorage.removeItem("user_id");
+        setUsuario(null);
+        if (logoutTimer) {
+            clearTimeout(logoutTimer);
+            setLogoutTimer(null);
+        }
+    };
+
+    const showSessionExpiredModal = () => {
+        setModal({
+            visible: true,
+            title: "Sesión expirada",
+            message: "Tu sesión ha caducado. Por favor, vuelve a iniciar sesión."
+        });
+    };
+
+    const closeModal = () => setModal({ ...modal, visible: false });
+
+    const handleLogin = (userData) => {
+        setUsuario(userData);
+
+        if (logoutTimer) {
+            clearTimeout(logoutTimer);
+            setLogoutTimer(null);
+        }
+
+        if (userData.token) {
+            try {
+                const payload = JSON.parse(atob(userData.token.split(".")[1]));
+                const now = Math.floor(Date.now() / 1000);
+                const exp = payload.exp && payload.exp > now ? payload.exp : now + 900; // 15 min por defecto
+                const expireInMs = (exp - now) * 1000;
+
+                const timer = setTimeout(() => {
+                    handleLogout();
+                    showSessionExpiredModal();
+                }, expireInMs);
+
+                setLogoutTimer(timer);
+            } catch (e) {
+                console.error("Error leyendo token", e);
+                handleLogout();
+            }
+        }
+    };
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem("usuario");
+        if (storedUser) {
+            const userData = JSON.parse(storedUser);
+            handleLogin(userData);
+        }
+        return () => logoutTimer && clearTimeout(logoutTimer);
+    }, []);
+
+    return (
+        <BrowserRouter>
+            <div className="flex flex-col min-h-screen">
+                <Header usuario={usuario} rol={usuario?.rol} onLogout={handleLogout} />
+
+                <main className="flex-1 flex flex-col">
+                    <Routes>
+                        {/* Public */}
+                        <Route
+                            path="/"
+                            element={
+                                usuario ? (
+                                    usuario.rol === "admin" ? (
+                                        <Navigate to="/admin/usuarios" />
+                                    ) : (
+                                        <Navigate to="/cliente/planos" />
+                                    )
+                                ) : (
+                                    <Login onLogin={handleLogin} />
+                                )
+                            }
+                        />
+                        <Route path="/register" element={<Register />} />
+
+                        {/* Admin */}
+                        {usuario?.rol === "admin" && (
+                            <Route
+                                path="/admin/*"
+                                element={
+                                    <AdminDashboard usuario={usuario} rol={usuario.rol} onLogout={handleLogout} />
+                                }
+                            >
+                                {adminPages.map((p) => (
+                                    <Route key={p.path} path={p.path} element={<p.component />} />
+                                ))}
+                                <Route index element={<Navigate to="usuarios" replace />} />
+                            </Route>
+                        )}
+
+                        {/* Cliente */}
+                        {usuario?.rol === "cliente" && (
+                            <Route
+                                path="/cliente/*"
+                                element={
+                                    <ClienteDashboard usuario={usuario} rol={usuario.rol} onLogout={handleLogout} />
+                                }
+                            >
+                                {clientesPages.map((p) => (
+                                    <Route key={p.path} path={p.path} element={<SubcarpetaViewer />} />
+                                ))}
+                                <Route index element={<Navigate to="planos" replace />} />
+                            </Route>
+                        )}
+
+                        {/* Catch-all */}
+                        <Route path="*" element={<Navigate to="/" />} />
+                    </Routes>
+                </main>
+
+                <Footer />
+
+                {/* Modal de sesión expirada */}
+                {modal.visible && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
+                            <h3 className="text-lg font-bold mb-4">{modal.title}</h3>
+                            <p className="mb-6">{modal.message}</p>
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={closeModal}
+                                    className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
+                                >
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </BrowserRouter>
+    );
+}
+
+==== Contenido de C:\Users\dcamprubi\source\repos\webCliente\frontend\src\main.jsx ====
+
+// src/main.jsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>
+);

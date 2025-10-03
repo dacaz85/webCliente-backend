@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import login, register, users, planos, empresas, user_permisos
+from app.routers import login, register, users, subcarpetaviewer, empresas, user_permisos, permisos_cliente
 from app.database import init_models
 
 app = FastAPI(title="WebCliente API")
@@ -20,6 +20,7 @@ app.add_middleware(
 app.include_router(login.router)
 app.include_router(register.router)
 app.include_router(users.router)
-app.include_router(planos.router)
+app.include_router(subcarpetaviewer.router)
 app.include_router(empresas.router)
 app.include_router(user_permisos.router)
+app.include_router(permisos_cliente.router)

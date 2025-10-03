@@ -13,7 +13,9 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
     const [showForm, setShowForm] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    // --- Cargar permisos según filtros ---
+    const [deleteModal, setDeleteModal] = useState({ open: false, permisoId: null });
+
+    // --- Cargar permisos ---
     const fetchPermisos = async () => {
         setLoading(true);
         try {
@@ -32,15 +34,18 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
         }
     };
 
+    // --- Cargar usuarios (sin admins) ---
     const fetchUsers = async () => {
         try {
             const res = await api.get("/users/all");
-            setUsers(res.data || []);
+            const filtered = (res.data || []).filter(u => u.rol !== "admin");
+            setUsers(filtered);
         } catch {
             setUsers([]);
         }
     };
 
+    // --- Cargar empresas ---
     const fetchEmpresas = async () => {
         try {
             const res = await api.get("/empresas/all");
@@ -59,20 +64,36 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
         fetchPermisos();
     }, [selectedUser, selectedEmpresa, search]);
 
-    // --- Limpiar filtros ---
+    // --- Cargar subcarpetas al cambiar empresa o usuario ---
+    useEffect(() => {
+        const fetchSubcarpetas = async () => {
+            if (!selectedEmpresa) {
+                setSubcarpetas([]);
+                return;
+            }
+            try {
+                const res = await api.get(`/empresas/${selectedEmpresa}/subcarpetas`, {
+                    params: { user_id: selectedUser || undefined }
+                });
+                setSubcarpetas(res.data || []);
+            } catch (err) {
+                console.error("Error al cargar subcarpetas:", err);
+                setSubcarpetas([]);
+            }
+        };
+        fetchSubcarpetas();
+    }, [selectedEmpresa, selectedUser]);
+
     const clearFilters = () => {
         setSelectedUser("");
         setSelectedEmpresa("");
         setSearch("");
     };
 
-    // --- Manejo de form ---
     const handleCrearPermisos = () => setShowForm(!showForm);
-
     const handleUserChange = (e) => setSelectedUser(e.target.value);
     const handleEmpresaChange = (e) => setSelectedEmpresa(e.target.value);
 
-    // --- Guardar permisos ---
     const handleSavePermisos = async () => {
         if (!selectedUser || !selectedEmpresa) {
             alert("Usuario y Empresa son obligatorios");
@@ -93,7 +114,6 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
         }
     };
 
-    // --- Manejo subcarpetas ---
     const handleSubcarpetaCheck = (idx) => {
         const newSub = [...subcarpetas];
         newSub[idx].checked = !newSub[idx].checked;
@@ -106,7 +126,6 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
         setSubcarpetas(newSub);
     };
 
-    // --- Cambiar rol individual ---
     const handleRoleChange = async (permisoId, rol) => {
         try {
             await api.put(`/user_permisos/${permisoId}`, { rol });
@@ -116,11 +135,19 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
         }
     };
 
-    // --- Eliminar permiso ---
-    const handleDelete = async (permisoId) => {
-        if (!window.confirm("¿Eliminar permiso?")) return;
+    // --- Abrir modal eliminar ---
+    const openDeleteModal = (permisoId) => {
+        setDeleteModal({ open: true, permisoId });
+    };
+
+    const closeDeleteModal = () => {
+        setDeleteModal({ open: false, permisoId: null });
+    };
+
+    const handleDelete = async () => {
         try {
-            await api.delete(`/user_permisos/${permisoId}`);
+            await api.delete(`/user_permisos/${deleteModal.permisoId}`);
+            closeDeleteModal();
             fetchPermisos();
         } catch (err) {
             console.error(err);
@@ -129,6 +156,7 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
 
     return (
         <div className="flex flex-col">
+            {/* --- Botones y filtros --- */}
             <div className="flex items-center gap-4 mb-4">
                 <button
                     className={`px-4 py-2 rounded ${showForm ? "bg-red-500" : "bg-green-500"} text-white`}
@@ -153,6 +181,7 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                 </button>
             </div>
 
+            {/* --- Formulario crear permisos --- */}
             {showForm && (
                 <div className="border p-4 mb-4 bg-white/50 rounded shadow">
                     <div className="flex flex-col gap-2 mb-2">
@@ -176,25 +205,33 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                     </div>
 
                     {subcarpetas.length > 0 && (
-                        <div className="mt-2">
-                            <h4 className="font-bold mb-2">Subcarpetas</h4>
-                            <table className="min-w-full border">
-                                <thead>
+                        <div className="mt-2 overflow-auto" style={{ maxHeight: '40vh' }}>                            
+                            <table className="min-w border-separate border-spacing-0.5">
+                                <thead className="bg-white/50">
                                     <tr>
-                                        <th className="border px-2 py-1">Seleccionar</th>
-                                        <th className="border px-2 py-1">Subcarpeta</th>
-                                        <th className="border px-2 py-1">Rol</th>
+                                        <th className="border px-4 py-2 text-left">Seleccionar</th>
+                                        <th className="border px-4 py-2 text-left">Subcarpeta</th>
+                                        <th className="border px-4 py-2 text-left">Rol</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
                                     {subcarpetas.map((s, idx) => (
                                         <tr key={idx}>
-                                            <td className="border px-2 py-1 text-center">
-                                                <input type="checkbox" checked={s.checked} onChange={() => handleSubcarpetaCheck(idx)} />
+                                            <td className="border px-4 py-2 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={s.checked}
+                                                    onChange={() => handleSubcarpetaCheck(idx)}
+                                                    className="scale-125"
+                                                />
                                             </td>
-                                            <td className="border px-2 py-1">{s.name}</td>
-                                            <td className="border px-2 py-1">
-                                                <select value={s.rol} onChange={(e) => handleSubcarpetaRol(idx, e.target.value)}>
+                                            <td className="border px-4 py-2">{s.name}</td>
+                                            <td className="border px-4 py-2">
+                                                <select
+                                                    value={s.rol}
+                                                    onChange={(e) => handleSubcarpetaRol(idx, e.target.value)}
+                                                    className="border px-2 py-1 rounded"
+                                                >
                                                     <option value="lector">Lector</option>
                                                     <option value="editor">Editor</option>
                                                 </select>
@@ -210,6 +247,7 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                 </div>
             )}
 
+            {/* --- Listado permisos --- */}
             {loading && <div>Cargando permisos...</div>}
             {!loading && permisos.length === 0 && <div>No hay permisos que mostrar</div>}
 
@@ -240,13 +278,13 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                                             className="border px-2 py-1 rounded"
                                         >
                                             <option value="lector">Lector</option>
-                                            <option value="editor">Editor</option>                                            
+                                            <option value="editor">Editor</option>
                                         </select>
                                     </td>
                                     <td className="border px-4 py-2">
                                         <button
                                             className="bg-red-500 text-white px-2 py-1 rounded"
-                                            onClick={() => handleDelete(p.id)}
+                                            onClick={() => openDeleteModal(p.id)}
                                         >
                                             Eliminar
                                         </button>
@@ -256,7 +294,31 @@ export default function PermisosTable({ initialUserId = null, initialEmpresaId =
                         </tbody>
                     </table>
                 </div>
-            )}            
+            )}
+
+            {/* --- Modal eliminar --- */}
+            {deleteModal.open && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded shadow p-6 w-96">
+                        <h3 className="font-bold mb-4">Confirmar eliminación</h3>
+                        <p className="mb-4">¿Estás seguro de que deseas eliminar este permiso?</p>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                                onClick={closeDeleteModal}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                                onClick={handleDelete}
+                            >
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
